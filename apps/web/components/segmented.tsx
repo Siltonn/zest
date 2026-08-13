@@ -13,7 +13,7 @@ export function Segmented<T extends string>({
   value,
   options,
   onChange,
-  size = "sm",
+  size = "md",
 }: {
   value: T;
   options: { id: T; label: string }[];

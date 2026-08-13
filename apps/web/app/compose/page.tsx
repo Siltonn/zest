@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type ChangeEvent } from "react";
 import { api, type Account } from "@/lib/api";
-import { Field } from "@/components/field";
+import { DateTimePicker } from "@/components/datetime-picker";
 import { Segmented } from "@/components/segmented";
 
 /**
@@ -41,7 +41,7 @@ export default function ComposePage() {
         accountId: account?.id,
         text,
         media,
-        ...(when ? { scheduledAt: new Date(when).toISOString() } : {}),
+        ...(when ? { scheduledAt: when } : {}),
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["posts"] });
@@ -154,12 +154,7 @@ export default function ComposePage() {
                   Add image
                 </Button>
               )}
-              <Field
-                type="datetime-local"
-                value={when}
-                onChange={setWhen}
-                aria-label="When to publish"
-              />
+              <DateTimePicker value={when} onChange={setWhen} />
             </div>
           </div>
         </Card.Content>
