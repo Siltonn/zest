@@ -69,7 +69,13 @@ export type Account = {
   displayName: string | null;
   avatarUrl: string | null;
   connectorId: string;
-  platform: { name: string; icon: string; color: string; charLimit: number } | null;
+  platform: {
+    name: string;
+    icon: string;
+    color: string;
+    charLimit: number;
+    maxImages: number;
+  } | null;
 };
 
 export type Post = {

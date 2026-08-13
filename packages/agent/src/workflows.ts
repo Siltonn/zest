@@ -244,6 +244,17 @@ export async function runAnalysis(
 
     const result = await runRole(options, "analyst", `${context}\n\n${task}`, handle.id);
 
+    // A weekly report nobody can find is not a report. Store it as a versioned
+    // memory doc so the dashboard can show the latest one.
+    if (options.weekly && result.text.trim()) {
+      await memory.writeMemory(db, {
+        workspaceId,
+        kind: "report",
+        contentMd: result.text,
+        actor: agentActor(handle.id, "analyst"),
+      });
+    }
+
     await finishRun(db, handle, { transcript: result.transcript });
     return { runId: handle.id, report: result.text };
   } catch (error) {

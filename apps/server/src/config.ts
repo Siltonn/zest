@@ -18,6 +18,8 @@ const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(16),
   BETTER_AUTH_URL: z.string().default("http://localhost:4000"),
   WEB_URL: z.string().default("http://localhost:3000"),
+  /** Where uploaded images live. Mount this as a volume in a container. */
+  MEDIA_DIR: z.string().default("./media"),
   DEMO_MODE: z
     .string()
     .default("false")

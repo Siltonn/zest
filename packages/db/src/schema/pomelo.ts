@@ -102,7 +102,9 @@ export const pomeloFollows = pgTable(
 
 export const pomeloTrends = pgTable("pomelo_trends", {
   id: uuid().primaryKey().defaultRandom(),
-  topic: text().notNull(),
+  // Unique so re-seeding cannot produce two of the same topic — which it did,
+  // and which surfaced as a duplicate-key warning in the feed's trend list.
+  topic: text().notNull().unique(),
   /** Rises and falls as the simulated clock advances. */
   momentum: integer().notNull().default(50),
   dayIndex: integer().notNull().default(0),

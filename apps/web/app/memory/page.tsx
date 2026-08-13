@@ -11,6 +11,7 @@ type MemoryResponse = {
   strategy: MemoryDoc | null;
   learnings: MemoryDoc | null;
   persona: MemoryDoc | null;
+  report: MemoryDoc | null;
 };
 
 /**
@@ -79,6 +80,16 @@ export default function MemoryPage() {
       doc: data?.learnings ?? null,
     },
   ];
+
+  // Only shown once a weekly run has produced one.
+  if (data?.report) {
+    docs.push({
+      kind: "report",
+      title: "Latest weekly report",
+      blurb: "What went out, how it did, and what the agent plans next.",
+      doc: data.report,
+    });
+  }
 
   if (accountId) {
     docs.splice(1, 0, {

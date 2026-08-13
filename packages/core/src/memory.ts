@@ -14,7 +14,12 @@ import type { Actor } from "@zest/shared";
  * one another.
  */
 
-export type MemoryKind = "brand_brief" | "strategy" | "learnings" | "persona";
+export type MemoryKind =
+  | "brand_brief"
+  | "strategy"
+  | "learnings"
+  | "persona"
+  | "report";
 
 export type MemoryDoc = typeof schema.memoryDocs.$inferSelect;
 

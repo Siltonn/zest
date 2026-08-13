@@ -18,6 +18,7 @@ import { DATABASE } from "../infra/database.module.js";
 import { REDIS_PUB } from "../infra/redis.module.js";
 import { NOTIFIER } from "../infra/notifier.module.js";
 import { QUEUE_PUBLISH } from "../queue/queue.constants.js";
+import { enqueueUnique } from "../queue/enqueue.js";
 import { toCredentials } from "./credentials.js";
 
 /**
@@ -63,10 +64,11 @@ export class PublishProcessor extends WorkerHost {
   private async sweep(): Promise<{ enqueued: number }> {
     const due = await findDuePosts(this.db);
     for (const post of due) {
-      await this.queue.add(
+      await enqueueUnique(
+        this.queue,
         "publish-post",
         { postId: post.id },
-        { jobId: `publish-${post.id}` },
+        `publish-${post.id}`,
       );
     }
     return { enqueued: due.length };

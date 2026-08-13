@@ -88,15 +88,21 @@ async function main(): Promise<void> {
         followerCount: persona.followerCount,
       })),
     );
-    await db.insert(schema.pomeloTrends).values(
+    console.info(`  ${PERSONA_SEEDS.length} Pomelo residents`);
+  }
+
+  // Guarded separately from personas, and idempotent regardless: seeding twice
+  // must never produce two of the same topic.
+  await db
+    .insert(schema.pomeloTrends)
+    .values(
       TREND_SEEDS.map((trend) => ({
         topic: trend.topic,
         momentum: trend.momentum,
         dayIndex: 0,
       })),
-    );
-    console.info(`  ${PERSONA_SEEDS.length} Pomelo residents`);
-  }
+    )
+    .onConflictDoNothing();
 
   // ── Two connected accounts, deliberately different voices ─────────────
   const [existingAccount] = await db

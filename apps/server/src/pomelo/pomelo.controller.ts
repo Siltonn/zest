@@ -142,13 +142,27 @@ export class PomeloController {
     return { id: post!.id, createdAt: post!.createdAt };
   }
 
+  /**
+   * Reply to a post, or to a comment on one.
+   *
+   * Answering someone's comment is the common case, and the id we are handed is
+   * that comment's id — so this resolves a reply id back to its parent post.
+   * Pomelo threads flat, like early Twitter, so both land in the same
+   * conversation.
+   */
   @Post("posts/:id/replies")
   async createReply(
-    @Param("id") postId: string,
+    @Param("id") targetId: string,
     @Body() body: { text: string },
     @Headers("authorization") authorization?: string,
   ) {
     const user = await this.authenticate(authorization);
+
+    const postId = await this.resolveToPostId(targetId);
+    if (!postId) {
+      throw new NotFoundException("Nothing on Pomelo with that id to reply to");
+    }
+
     const [reply] = await this.db
       .insert(schema.pomeloReplies)
       .values({ postId, authorId: user.id, text: body.text })
@@ -159,7 +173,24 @@ export class PomeloController {
       .set({ replyCount: sql`${schema.pomeloPosts.replyCount} + 1` })
       .where(eq(schema.pomeloPosts.id, postId));
 
-    return { id: reply!.id };
+    return { id: reply!.id, postId };
+  }
+
+  private async resolveToPostId(id: string): Promise<string | null> {
+    // A malformed id would otherwise fail the uuid cast and surface as a 500.
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+
+    const [post] = await this.db
+      .select({ id: schema.pomeloPosts.id })
+      .from(schema.pomeloPosts)
+      .where(eq(schema.pomeloPosts.id, id));
+    if (post) return post.id;
+
+    const [reply] = await this.db
+      .select({ postId: schema.pomeloReplies.postId })
+      .from(schema.pomeloReplies)
+      .where(eq(schema.pomeloReplies.id, id));
+    return reply?.postId ?? null;
   }
 
   /** Everything new since a timestamp: metrics plus inbound conversation. */

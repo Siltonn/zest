@@ -31,13 +31,16 @@
     "@zest/core": "workspace:*",
     "@zest/mcp": "workspace:*",
     "@zest/simulator": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.30.0"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "multer": "^2.0.0",
+    "express": "^5.2.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.6",
     "@nestjs/schematics": "^11.0.5",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "@types/multer": "^2.0.0"
   }
 }

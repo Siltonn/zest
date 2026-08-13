@@ -3,7 +3,7 @@
 import { Button, Card, Chip, Spinner, TextArea } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState, type ChangeEvent } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 import { api, type Account } from "@/lib/api";
 
 /**
@@ -19,6 +19,9 @@ export default function ComposePage() {
   const [accountId, setAccountId] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [when, setWhen] = useState("");
+  const [media, setMedia] = useState<{ url: string; altText?: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ["accounts"],
@@ -35,6 +38,7 @@ export default function ComposePage() {
       api.post("/posts", {
         accountId: account?.id,
         text,
+        media,
         ...(when ? { scheduledAt: new Date(when).toISOString() } : {}),
       }),
     onSuccess: () => {
@@ -85,17 +89,80 @@ export default function ComposePage() {
             rows={7}
             placeholder={`What should @${account?.handle ?? "…"} say?`}
           />
+          {media.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {media.map((item, index) => (
+                <div key={item.url} className="relative">
+                  <img
+                    src={item.url}
+                    alt=""
+                    className="size-20 rounded-lg object-cover"
+                  />
+                  <button
+                    onClick={() => setMedia((m) => m.filter((_, i) => i !== index))}
+                    className="absolute -right-1.5 -top-1.5 size-5 rounded-full bg-default-800 text-xs text-white"
+                    aria-label="Remove image"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              setUploading(true);
+              try {
+                const form = new FormData();
+                form.append("file", file);
+                // Not api.post: this is multipart, so no JSON content type.
+                const res = await fetch("/api/v1/media", {
+                  method: "POST",
+                  body: form,
+                  credentials: "include",
+                });
+                if (res.ok) {
+                  const { url } = (await res.json()) as { url: string };
+                  setMedia((m) => [...m, { url }]);
+                }
+              } finally {
+                setUploading(false);
+                if (fileInput.current) fileInput.current.value = "";
+              }
+            }}
+          />
+
           <div className="flex items-center justify-between text-sm">
             <span className={over ? "font-medium text-red-500" : "opacity-50"}>
               {length} / {limit}
               {over && ` — ${length - limit} over`}
             </span>
-            <input
+            <div className="flex items-center gap-2">
+              {(account?.platform?.maxImages ?? 0) > 0 && (
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  isPending={uploading}
+                  isDisabled={media.length >= (account?.platform?.maxImages ?? 4)}
+                  onPress={() => fileInput.current?.click()}
+                >
+                  Add image
+                </Button>
+              )}
+              <input
               type="datetime-local"
               value={when}
               onChange={(e) => setWhen(e.target.value)}
               className="rounded-lg border border-default-200/60 bg-transparent px-2 py-1 text-sm"
-            />
+              />
+            </div>
           </div>
         </Card.Content>
         <Card.Footer className="flex gap-2">

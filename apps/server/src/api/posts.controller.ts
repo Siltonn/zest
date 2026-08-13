@@ -19,6 +19,7 @@ import { getConnector, listConnectorMeta } from "@zest/connectors";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
 import { QUEUE_PUBLISH } from "../queue/queue.constants.js";
+import { enqueueUnique } from "../queue/enqueue.js";
 import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
 
 /**
@@ -209,7 +210,7 @@ export class PostsController {
       actor: req.actor,
       patch: { scheduledAt: new Date() },
     });
-    await this.publishQueue.add("publish-post", { postId: id }, { jobId: `publish-${id}` });
+    await enqueueUnique(this.publishQueue, "publish-post", { postId: id }, `publish-${id}`);
     return { ok: true };
   }
 
@@ -256,10 +257,11 @@ export class PostsController {
       req.actor,
       body?.text ? { text: body.text, media: [] } : undefined,
     );
-    await this.publishQueue.add(
+    await enqueueUnique(
+      this.publishQueue,
       "send-reply",
       { replyDraftId: draft.id },
-      { jobId: `reply-${draft.id}` },
+      `reply-${draft.id}`,
     );
     return { ok: true };
   }

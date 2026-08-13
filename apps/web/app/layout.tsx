@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { AppShell } from "@/components/app-shell";
+import { Chrome } from "@/components/chrome";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body className="min-h-screen antialiased">
         <Providers>
-          <AppShell>{children}</AppShell>
+          <Chrome>{children}</Chrome>
         </Providers>
       </body>
     </html>

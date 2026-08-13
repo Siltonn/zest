@@ -1,0 +1,1 @@
+ALTER TYPE "public"."memory_kind" ADD VALUE 'report';

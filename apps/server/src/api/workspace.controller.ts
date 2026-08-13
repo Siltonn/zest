@@ -30,6 +30,7 @@ import {
   QUEUE_SIMULATOR,
 } from "../queue/queue.constants.js";
 import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
+import { toCron } from "../worker/planning.scheduler.js";
 
 /** Workspace settings, accounts, memory, autonomy, analytics and audit. */
 @Controller("api/v1")
@@ -69,6 +70,17 @@ export class WorkspaceController {
       .set(input as never)
       .where(eq(schema.workspaces.id, req.workspaceId))
       .returning();
+
+    // Changing the cadence has to reach the queue, or the setting saves and
+    // nothing actually happens differently.
+    if (input.planningSchedule) {
+      await this.agentQueue.upsertJobScheduler(
+        `plan-${req.workspaceId}`,
+        { pattern: toCron(input.planningSchedule) ?? "0 7 * * *" },
+        { name: "planning", data: { workspaceId: req.workspaceId } },
+      );
+    }
+
     return updated;
   }
 
@@ -148,15 +160,16 @@ export class WorkspaceController {
 
   @Get("memory")
   async memoryDocs(@Req() req: AuthedRequest, @Query("accountId") accountId?: string) {
-    const [brief, strategy, learnings] = await Promise.all([
+    const [brief, strategy, learnings, report] = await Promise.all([
       memory.readMemory(this.db, req.workspaceId, "brand_brief"),
       memory.readMemory(this.db, req.workspaceId, "strategy"),
       memory.readMemory(this.db, req.workspaceId, "learnings"),
+      memory.readMemory(this.db, req.workspaceId, "report"),
     ]);
     const persona = accountId
       ? await memory.readMemory(this.db, req.workspaceId, "persona", accountId)
       : null;
-    return { brief, strategy, learnings, persona };
+    return { brief, strategy, learnings, persona, report };
   }
 
   @Get("memory/:kind/history")
@@ -177,7 +190,7 @@ export class WorkspaceController {
   async writeMemory(@Req() req: AuthedRequest, @Body() body: unknown) {
     const input = z
       .object({
-        kind: z.enum(["brand_brief", "strategy", "learnings", "persona"]),
+        kind: z.enum(["brand_brief", "strategy", "learnings", "persona", "report"]),
         contentMd: z.string(),
         accountId: z.string().uuid().optional(),
       })

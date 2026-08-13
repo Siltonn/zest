@@ -90,9 +90,13 @@ export const mastodonConnector: Connector = {
   },
 
   async publish(credentials, content): Promise<PublishResult> {
+    const mediaIds = await uploadMedia(credentials, content.media);
     const status = await mastodonFetch<Status>(credentials, "/statuses", {
       method: "POST",
-      body: JSON.stringify({ status: content.text }),
+      body: JSON.stringify({
+        status: content.text,
+        ...(mediaIds.length > 0 ? { media_ids: mediaIds } : {}),
+      }),
     });
     return { externalId: status.id, url: status.url };
   },
@@ -197,6 +201,43 @@ export const mastodonConnector: Connector = {
     };
   },
 };
+
+/**
+ * Mastodon takes media as multipart uploads that return an id, which the status
+ * then references. Alt text goes up with the file.
+ */
+async function uploadMedia(
+  credentials: AccountCredentials,
+  media: PostContent["media"],
+): Promise<string[]> {
+  if (media.length === 0) return [];
+  const instance = credentials.endpoint;
+  if (!instance) return [];
+
+  const ids: string[] = [];
+
+  for (const item of media.slice(0, 4)) {
+    const source = await fetch(item.url);
+    if (!source.ok) continue;
+
+    const form = new FormData();
+    form.append("file", await source.blob());
+    if (item.altText) form.append("description", item.altText);
+
+    // v2 returns 202 while processing; the id is usable either way.
+    const res = await fetch(`${instance}/api/v2/media`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${credentials.accessToken ?? ""}` },
+      body: form,
+    });
+    if (!res.ok) continue;
+
+    const uploaded = (await res.json()) as { id: string };
+    ids.push(uploaded.id);
+  }
+
+  return ids;
+}
 
 function stripHtml(html: string): string {
   return html

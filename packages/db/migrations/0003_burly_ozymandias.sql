@@ -1,0 +1,1 @@
+ALTER TABLE "pomelo_trends" ADD CONSTRAINT "pomelo_trends_topic_unique" UNIQUE("topic");

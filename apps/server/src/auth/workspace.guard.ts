@@ -88,12 +88,38 @@ export class WorkspaceGuard implements CanActivate {
       .from(schema.memberships)
       .where(eq(schema.memberships.userId, userId));
 
-    if (!membership) throw new UnauthorizedException("No workspace for this user");
+    // A freshly signed-up user has no workspace yet. Creating one here means
+    // they land on a usable app instead of an error they cannot act on.
+    const workspaceId = membership?.workspaceId ?? (await this.createWorkspace(userId));
 
-    req.workspaceId = membership.workspaceId;
+    req.workspaceId = workspaceId;
     req.userId = userId;
     req.actor = { kind: "human", userId };
     return true;
+  }
+
+  private async createWorkspace(userId: string): Promise<string> {
+    const [user] = await this.db
+      .select({ name: schema.users.name })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId));
+
+    const [workspace] = await this.db
+      .insert(schema.workspaces)
+      .values({
+        name: user?.name ? `${user.name}'s workspace` : "My workspace",
+        // Falls back to UTC; the settings page lets them change it.
+        timezone: "UTC",
+      })
+      .returning();
+
+    await this.db.insert(schema.memberships).values({
+      workspaceId: workspace!.id,
+      userId,
+      role: "owner",
+    });
+
+    return workspace!.id;
   }
 }
 

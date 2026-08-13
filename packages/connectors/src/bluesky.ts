@@ -99,6 +99,43 @@ function permalink(handle: string, uri: string): string {
   return `https://bsky.app/profile/${handle}/post/${rkey}`;
 }
 
+/**
+ * Bluesky stores images as blobs, uploaded separately and then referenced by
+ * the post record. Alt text is sent when we have it, because a post without it
+ * is unreadable to anyone using a screen reader.
+ */
+async function uploadImages(
+  session: Session,
+  serviceUrl: string,
+  media: PostContent["media"],
+): Promise<Record<string, unknown> | undefined> {
+  if (media.length === 0) return undefined;
+
+  const images: { image: unknown; alt: string }[] = [];
+
+  for (const item of media.slice(0, 4)) {
+    const source = await fetch(item.url);
+    if (!source.ok) continue;
+
+    const bytes = await source.arrayBuffer();
+    const res = await fetch(`${serviceUrl}/xrpc/com.atproto.repo.uploadBlob`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.accessJwt}`,
+        "Content-Type": source.headers.get("content-type") ?? "image/jpeg",
+      },
+      body: bytes,
+    });
+    if (!res.ok) continue;
+
+    const { blob } = (await res.json()) as { blob: unknown };
+    images.push({ image: blob, alt: item.altText ?? "" });
+  }
+
+  if (images.length === 0) return undefined;
+  return { embed: { $type: "app.bsky.embed.images", images } };
+}
+
 export const blueskyConnector: Connector = {
   meta,
 
@@ -135,7 +172,11 @@ export const blueskyConnector: Connector = {
 
   async publish(credentials, content): Promise<PublishResult> {
     return withSession(credentials, async (session, serviceUrl) => {
-      const created = await createRecord(session, serviceUrl, { text: content.text });
+      const embed = await uploadImages(session, serviceUrl, content.media);
+      const created = await createRecord(session, serviceUrl, {
+        text: content.text,
+        ...embed,
+      });
       return {
         externalId: created.uri,
         url: permalink(session.handle, created.uri),

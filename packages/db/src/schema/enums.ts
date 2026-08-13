@@ -14,6 +14,9 @@ export const memoryKindEnum = pgEnum("memory_kind", [
   "strategy",
   "learnings",
   "persona",
+  // The analyst's weekly write-up. Versioned like the rest so past reports stay
+  // readable instead of being overwritten each week.
+  "report",
 ]);
 
 export const agentRoleEnum = pgEnum("agent_role", [
