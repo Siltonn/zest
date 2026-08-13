@@ -3,7 +3,7 @@ import { Inject, Logger } from "@nestjs/common";
 import type { Job, Queue } from "bullmq";
 import type { Redis } from "ioredis";
 import { eq, schema, type Database } from "@zest/db";
-import { Notifier, approvals, plans } from "@zest/core";
+import { Notifier, approvals, autonomy, emit, plans } from "@zest/core";
 import { runAnalysis, runCopy, runReplyTriage, runResearch, runStrategy } from "@zest/agent";
 import { DATABASE } from "../infra/database.module.js";
 import { REDIS_PUB } from "../infra/redis.module.js";
@@ -85,14 +85,34 @@ export class AgentProcessor extends WorkerHost {
           return result;
         }
 
-        const accountIds = await plans.accountsWithPendingItems(
-          this.db,
-          job.data.planId as string,
-        );
+        const planId = job.data.planId as string;
+        const accountIds = await plans.accountsWithPendingItems(this.db, planId);
+
+        // The cheap review altitude. Without a granted rule the planned week
+        // waits in the inbox as one card, so topics can be dropped before a
+        // model call turns each into a draft. With `auto` it goes straight to
+        // the writers — same stage, same code, different trust.
+        const decision = await autonomy.decide(this.db, {
+          workspaceId,
+          action: "write_plan",
+        });
+
+        if (decision.mode !== "auto") {
+          await emit(this.redis, {
+            type: "inbox.new",
+            workspaceId,
+            itemKind: "plan",
+            entityId: planId,
+            summary: `A week of content is planned and waiting for review`,
+          });
+          await this.notifyPending(workspaceId, "A planned week is waiting for review");
+          return { ...result, awaitingReview: accountIds.length };
+        }
+
         for (const accountId of accountIds) {
           await this.queue.add("plan-copy", {
             workspaceId,
-            planId: job.data.planId,
+            planId,
             accountId,
           });
         }

@@ -25,7 +25,8 @@ other way around — as an operations agent with a supervision UI:
   can be listed, filtered, bulk-approved, expired, deep-linked from Slack, and approved
   over MCP — none of which works if the pending state is buried in a workflow checkpoint.
 - **A content wind tunnel.** Because Pomelo's audience is real software, you can A/B a post
-  against simulated readers *before* it goes to a live platform.
+  against simulated readers *before* it goes to a live platform — and send the winner
+  straight to the approval inbox with its score as the reason.
 - **Full provenance.** Each state transition records who caused it — human, agent, system,
   MCP client, or API key — and links to the agent run transcript that produced it.
 - **Runs offline, end to end.** `docker compose up` is the whole demo.
@@ -62,7 +63,9 @@ so there is nothing to memorise:
    same mechanism. Research happens once, a strategist plans each programme into concrete
    items, and a writer takes one account at a time so the voices stay apart. Nothing
    publishes — proposals land in `/inbox`.
-5. **Approve, edit, or send one back** with a note. Approving schedules it.
+5. **Approve, edit, or send one back** with a note. Approving schedules it. Reviews
+   happen at two altitudes: the planned week arrives as one card you can prune before
+   anything is written, and the finished drafts arrive individually.
 6. **Fast-forward a day.** Scheduled posts publish, the simulated audience reacts, and
    their comments come back for triage.
 

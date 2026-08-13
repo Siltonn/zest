@@ -1,0 +1,1 @@
+ALTER TYPE "public"."autonomy_action" ADD VALUE 'write_plan' BEFORE 'schedule_post';

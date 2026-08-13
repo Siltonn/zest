@@ -10,7 +10,7 @@ export const domainEventSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("inbox.new"),
     workspaceId: z.string(),
-    itemKind: z.enum(["post", "reply", "memory", "autonomy_request"]),
+    itemKind: z.enum(["post", "reply", "memory", "autonomy_request", "plan"]),
     entityId: z.string(),
     summary: z.string(),
   }),

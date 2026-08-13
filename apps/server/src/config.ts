@@ -26,6 +26,13 @@ const envSchema = z.object({
     .transform((v) => v === "true" || v === "1"),
   MAIL_PROVIDER: z.enum(["resend", "smtp", "console"]).default("console"),
   RESEND_API_KEY: z.string().optional(),
+  // Defaults point at the Mailpit container in docker-compose, so the demo
+  // delivers real mail to a real inbox with nothing to configure.
+  SMTP_HOST: z.string().default("localhost"),
+  SMTP_PORT: z.coerce.number().default(1025),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  MAIL_FROM: z.string().default("Zest <zest@localhost>"),
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
 });

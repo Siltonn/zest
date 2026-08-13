@@ -14,6 +14,11 @@ export const NOTIFIER = Symbol("NOTIFIER");
         return new Notifier({
           mailProvider: createMailProvider(env.MAIL_PROVIDER, {
             apiKey: env.RESEND_API_KEY,
+            from: env.MAIL_FROM,
+            host: env.SMTP_HOST,
+            port: env.SMTP_PORT,
+            user: env.SMTP_USER,
+            pass: env.SMTP_PASS,
           }),
           webUrl: env.WEB_URL,
         });

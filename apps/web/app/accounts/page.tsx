@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Card, Chip, EmptyState, Spinner } from "@heroui/react";
+import { Button, Card, Chip, EmptyState, Spinner, toast } from "@heroui/react";
 import { Field } from "@/components/field";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -47,6 +47,27 @@ export default function AccountsPage() {
     },
   });
 
+  /**
+   * Engagement is pulled every five minutes, which is the wrong wait when you
+   * have just posted. Fast-forward only moves Pomelo's clock — a real platform
+   * needs an actual fetch.
+   */
+  const poll = useMutation({
+    mutationFn: () => api.post("/ingest/poll"),
+    onSuccess: () => {
+      toast.success("Checking every connected account", {
+        description: "New comments and metrics appear within a few seconds.",
+      });
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["inbound"] });
+        void queryClient.invalidateQueries({ queryKey: ["inbox-count"] });
+        void queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      }, 3000);
+    },
+    onError: (error: Error) =>
+      toast.danger("Could not check", { description: error.message }),
+  });
+
   const disconnect = useMutation({
     mutationFn: (id: string) => api.delete(`/accounts/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["accounts"] }),
@@ -62,12 +83,23 @@ export default function AccountsPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
-      <header>
-        <h1 className="text-2xl font-semibold">Accounts</h1>
-        <p className="text-sm opacity-60">
-          Pomelo connects instantly. Real platforms need credentials you supply — Zest
-          never asks you to trust a shared app.
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Accounts</h1>
+          <p className="text-sm opacity-60">
+            Pomelo connects instantly. Real platforms need credentials you supply — Zest
+            never asks you to trust a shared app.
+          </p>
+        </div>
+        {accounts.length > 0 && (
+          <Button
+            variant="secondary"
+            onPress={() => poll.mutate()}
+            isPending={poll.isPending}
+          >
+            Check for new activity
+          </Button>
+        )}
       </header>
 
       {accounts.length > 0 && (

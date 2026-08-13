@@ -6,6 +6,7 @@ import { useEffect, useState, type ChangeEvent } from "react";
 import { api, type InboxItem } from "@/lib/api";
 import { DiffView } from "@/components/diff";
 import { Unanswered } from "@/components/unanswered";
+import Link from "next/link";
 import { relativeTime, formatDateTime } from "@/lib/format";
 
 /**
@@ -16,6 +17,7 @@ import { relativeTime, formatDateTime } from "@/lib/format";
 function endpointFor(item: InboxItem, action: string): string {
   if (item.kind === "reply") return `/replies/${item.id}/${action}`;
   if (item.kind === "post") return `/posts/${item.id}/${action}`;
+  if (item.kind === "plan") return `/plans/${item.id}/${action}`;
   return `/changes/${item.id}/${action}`;
 }
 
@@ -24,13 +26,18 @@ const KIND_LABEL: Record<InboxItem["kind"], string> = {
   reply: "reply",
   memory: "memory",
   autonomy_request: "autonomy",
+  plan: "plan",
 };
 
-const KIND_COLOR: Record<InboxItem["kind"], "warning" | "accent" | "success"> = {
+const KIND_COLOR: Record<
+  InboxItem["kind"],
+  "warning" | "accent" | "success" | "default"
+> = {
   post: "warning",
   reply: "accent",
   memory: "accent",
   autonomy_request: "success",
+  plan: "default",
 };
 
 /**
@@ -203,6 +210,8 @@ export default function InboxPage() {
                     />
                   ) : item.kind === "memory" ? (
                     <DiffView before={item.before ?? ""} after={item.body} />
+                  ) : item.kind === "plan" ? (
+                    <PlanItems item={item} onChanged={refresh} />
                   ) : item.kind === "autonomy_request" ? (
                     <div className="rounded-lg border border-success/30 bg-success/5 px-3 py-2.5 text-sm">
                       <p className="leading-relaxed">{item.body}</p>
@@ -285,6 +294,13 @@ export default function InboxPage() {
                       >
                         Approve
                       </Button>
+                      {item.kind === "plan" && (
+                        <Link href="/plans">
+                          <Button size="sm" variant="secondary">
+                            Open in plans
+                          </Button>
+                        </Link>
+                      )}
                       {(item.kind === "post" || item.kind === "reply") && (
                         <Button
                           size="sm"
@@ -325,6 +341,85 @@ export default function InboxPage() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * A planned week, as topics rather than drafts.
+ *
+ * Approving releases the whole thing to the writers; dropping a topic here
+ * costs one click and saves the model call that would have turned it into a
+ * draft nobody wanted. That is the entire argument for this altitude existing.
+ */
+function PlanItems({
+  item,
+  onChanged,
+}: {
+  item: InboxItem;
+  onChanged: () => void;
+}) {
+  const [dropped, setDropped] = useState<Set<string>>(new Set());
+
+  const skip = useMutation({
+    mutationFn: (itemId: string) => api.post(`/plans/items/${itemId}/skip`),
+    onSuccess: (_result, itemId) => {
+      setDropped((current) => new Set(current).add(itemId));
+      onChanged();
+    },
+  });
+
+  const items = item.planItems ?? [];
+  const byAccount = new Map<string, typeof items>();
+  for (const entry of items) {
+    byAccount.set(entry.accountHandle, [
+      ...(byAccount.get(entry.accountHandle) ?? []),
+      entry,
+    ]);
+  }
+
+  return (
+    <div className="space-y-3">
+      {item.body && <p className="text-sm opacity-60">{item.body}</p>}
+      {[...byAccount.entries()].map(([handle, entries]) => (
+        <div key={handle}>
+          <div className="mb-1 text-xs font-medium uppercase tracking-wide opacity-45">
+            @{handle}
+          </div>
+          <div className="space-y-1">
+            {entries.map((entry) => (
+              <div
+                key={entry.id}
+                className={`flex items-start justify-between gap-3 rounded-lg border border-default-200/60 px-3 py-2 ${
+                  dropped.has(entry.id) ? "opacity-40 line-through" : ""
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">{entry.topic}</div>
+                  {entry.angle && (
+                    <div className="text-xs opacity-60">{entry.angle}</div>
+                  )}
+                  {entry.suggestedSlotAt && (
+                    <div className="mt-0.5 text-xs opacity-40">
+                      {formatDateTime(entry.suggestedSlotAt)}
+                    </div>
+                  )}
+                </div>
+                {!dropped.has(entry.id) && (
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    onPress={() => skip.mutate(entry.id)}
+                    isPending={skip.isPending}
+                  >
+                    Drop
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

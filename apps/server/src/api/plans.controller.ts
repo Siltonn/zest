@@ -13,7 +13,7 @@ import {
 } from "@nestjs/common";
 import { InjectQueue } from "@nestjs/bullmq";
 import type { Queue } from "bullmq";
-import type { Database } from "@zest/db";
+import { schema, type Database } from "@zest/db";
 import { plans } from "@zest/core";
 import { hasModelAccess } from "@zest/agent";
 import { z } from "zod";
@@ -94,6 +94,66 @@ export class PlansController {
     } catch (error) {
       throw new BadRequestException((error as Error).message);
     }
+  }
+
+  /**
+   * Approve a planned week: release it to the writers.
+   *
+   * Named `approve` because that is what it is from the inbox's side — the same
+   * verb as approving a post, one altitude up. Whatever survived the operator's
+   * edits and skips is what gets written.
+   */
+  @Post(":id/approve")
+  async approvePlan(@Req() req: AuthedRequest, @Param("id") id: string) {
+    const found = await plans.readPlan(this.db, req.workspaceId, id);
+    if (!found) throw new NotFoundException("No such plan");
+
+    const accountIds = await plans.accountsWithPendingItems(this.db, id);
+    if (accountIds.length === 0) {
+      throw new BadRequestException("Nothing is waiting to be written on this plan");
+    }
+
+    for (const accountId of accountIds) {
+      await this.agentQueue.add("plan-copy", {
+        workspaceId: req.workspaceId,
+        planId: id,
+        accountId,
+      });
+    }
+
+    await this.db.insert(schema.auditLogs).values({
+      workspaceId: req.workspaceId,
+      entityType: "plan",
+      entityId: id,
+      action: "approve_plan",
+      actor: req.actor,
+      diff: { writers: accountIds.length },
+    });
+
+    return { ok: true, writers: accountIds.length };
+  }
+
+  /** Reject the whole week — skip every unwritten item at once. */
+  @Post(":id/reject")
+  async rejectPlan(@Req() req: AuthedRequest, @Param("id") id: string) {
+    const found = await plans.readPlan(this.db, req.workspaceId, id);
+    if (!found) throw new NotFoundException("No such plan");
+
+    const waiting = found.items.filter((i) => i.status === "planned");
+    for (const item of waiting) {
+      await plans.skipItem(this.db, req.workspaceId, item.id);
+    }
+
+    await this.db.insert(schema.auditLogs).values({
+      workspaceId: req.workspaceId,
+      entityType: "plan",
+      entityId: id,
+      action: "reject_plan",
+      actor: req.actor,
+      diff: { skipped: waiting.length },
+    });
+
+    return { ok: true, skipped: waiting.length };
   }
 
   /** Drop an item before anyone writes it — the cheap end of review. */

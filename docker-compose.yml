@@ -50,7 +50,10 @@ services:
       BETTER_AUTH_URL: http://localhost:4000
       WEB_URL: http://localhost:3000
       DEMO_MODE: ${DEMO_MODE:-true}
-      MAIL_PROVIDER: ${MAIL_PROVIDER:-console}
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-smtp}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      MAIL_FROM: ${MAIL_FROM:-Zest <zest@localhost>}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "4000:4000"

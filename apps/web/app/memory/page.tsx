@@ -4,6 +4,7 @@ import { Button, Card, Chip, Spinner, TextArea } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ChangeEvent } from "react";
 import { api, type Account, type MemoryDoc } from "@/lib/api";
+import { DiffView } from "@/components/diff";
 import { Segmented } from "@/components/segmented";
 import { describeActor, relativeTime } from "@/lib/format";
 
@@ -27,6 +28,7 @@ export default function MemoryPage() {
   const queryClient = useQueryClient();
   const [accountId, setAccountId] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [history, setHistory] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
   const { data: accounts = [] } = useQuery({
@@ -134,6 +136,15 @@ export default function MemoryPage() {
                   v{doc.version}
                 </Chip>
               )}
+              {doc && doc.version > 1 && editing !== kind && (
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  onPress={() => setHistory(history === kind ? null : kind)}
+                >
+                  {history === kind ? "Hide history" : "History"}
+                </Button>
+              )}
               {editing === kind ? (
                 <>
                   <Button
@@ -161,6 +172,12 @@ export default function MemoryPage() {
               )}
             </div>
           </Card.Header>
+
+          {history === kind && (
+            <Card.Content className="border-b border-default-200/60 pb-4">
+              <MemoryHistory kind={kind} accountId={accountId} />
+            </Card.Content>
+          )}
 
           <Card.Content>
             {editing === kind ? (
@@ -190,6 +207,55 @@ export default function MemoryPage() {
           )}
         </Card>
       ))}
+    </div>
+  );
+}
+
+/**
+ * How a document got to where it is.
+ *
+ * Memory is the thing the agent proposes changes to, so "what changed and who
+ * changed it" is not a nice-to-have — approving a rewrite you cannot see the
+ * shape of is the failure this whole review surface exists to prevent.
+ */
+function MemoryHistory({
+  kind,
+  accountId,
+}: {
+  kind: string;
+  accountId: string | null;
+}) {
+  const { data: versions = [], isLoading } = useQuery({
+    queryKey: ["memory-history", kind, accountId],
+    queryFn: () =>
+      api.get<MemoryDoc[]>(
+        `/memory/${kind}/history${accountId ? `?accountId=${accountId}` : ""}`,
+      ),
+  });
+
+  if (isLoading) return <Spinner />;
+  if (versions.length < 2) {
+    return <p className="text-sm opacity-50">Only one version so far.</p>;
+  }
+
+  // Newest first, each shown against the version it replaced.
+  return (
+    <div className="space-y-4">
+      {versions.slice(0, -1).map((version, index) => {
+        const previous = versions[index + 1];
+        return (
+          <div key={version.id}>
+            <div className="mb-1.5 flex items-center gap-2 text-xs opacity-55">
+              <span className="font-medium">
+                v{previous?.version} → v{version.version}
+              </span>
+              <span>· {describeActor(version.updatedByActor)}</span>
+              <span>· {relativeTime(version.createdAt)}</span>
+            </div>
+            <DiffView before={previous?.contentMd ?? ""} after={version.contentMd} />
+          </div>
+        );
+      })}
     </div>
   );
 }

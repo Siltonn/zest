@@ -6,6 +6,10 @@ import { z } from "zod";
  */
 export const AUTONOMY_ACTIONS = [
   "propose_post",
+  // Whether a planned week may go straight to the copywriter, or has to be
+  // signed off first. The cheap review altitude: deciding on six topics costs
+  // far less attention than reading six finished drafts.
+  "write_plan",
   "schedule_post",
   "send_reply",
   "update_memory",

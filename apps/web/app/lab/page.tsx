@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Card, Chip, Spinner, TextArea } from "@heroui/react";
+import { Button, Card, Chip, Spinner, TextArea, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ChangeEvent } from "react";
 import { api, type Account } from "@/lib/api";
@@ -55,6 +55,36 @@ export default function LabPage() {
   });
 
   const account = accounts.find((a) => a.id === accountId) ?? accounts[0];
+
+  // A rehearsal is evidence, not permission — the winner still goes to the
+  // inbox like anything else.
+  const promote = useMutation({
+    mutationFn: (input: { text: string; score: number; runnerUp?: number }) =>
+      api.post("/wind-tunnel/promote", {
+        accountId,
+        text: input.text,
+        score: input.score,
+        ...(input.runnerUp !== undefined ? { runnerUpScore: input.runnerUp } : {}),
+      }),
+    onSuccess: () => {
+      toast.success("Sent for approval", {
+        description: "It is in your inbox with the wind tunnel result as its reason.",
+      });
+      void queryClient.invalidateQueries({ queryKey: ["inbox-count"] });
+    },
+    onError: (error: Error) =>
+      toast.danger("Could not promote it", { description: error.message }),
+  });
+
+  // Refreshed alongside the rules so the preview reflects what is configured.
+  const { data: pending = [] } = useQuery({
+    queryKey: ["automations-preview"],
+    queryFn: () =>
+      api.get<{ kind: string; text?: string; handle?: string }[]>(
+        "/automations/preview",
+      ),
+    refetchInterval: 30_000,
+  });
 
   const test = useMutation({
     mutationFn: () =>
@@ -166,6 +196,24 @@ export default function LabPage() {
                       </span>
                     </div>
                     <p className="text-sm opacity-80">{variant.text}</p>
+                    <div className="mt-2 flex justify-end">
+                      <Button
+                        size="sm"
+                        variant={won ? "primary" : "tertiary"}
+                        onPress={() =>
+                          promote.mutate({
+                            text: variant.text,
+                            score: variant.score,
+                            runnerUp: test.data?.variants.find(
+                              (v) => v.id !== variant.id,
+                            )?.score,
+                          })
+                        }
+                        isPending={promote.isPending}
+                      >
+                        {won ? "Send this one for approval" : "Send this instead"}
+                      </Button>
+                    </div>
                     <div className="mt-2 flex flex-wrap gap-3 text-xs opacity-50">
                       <span>{variant.impressions} saw it</span>
                       <span>♥ {variant.likes}</span>
@@ -196,6 +244,28 @@ export default function LabPage() {
           </p>
         </Card.Header>
         <Card.Content className="space-y-3">
+          {/* What the rules would do right now. A rule you cannot see the
+              effect of before granting autonomy is a rule you cannot judge. */}
+          {pending.length > 0 && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
+              <div className="text-sm font-medium">
+                {pending.length} would fire right now
+              </div>
+              <ul className="mt-1 space-y-0.5 text-xs opacity-70">
+                {pending.slice(0, 5).map((action, index) => (
+                  <li key={index}>
+                    {action.kind.replace(/_/g, " ")} —{" "}
+                    {"text" in action ? action.text : (action as { handle?: string }).handle}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-xs opacity-50">
+                They fire on the next engagement poll, once autonomy is granted for
+                engagement automations.
+              </p>
+            </div>
+          )}
+
           {automations.map((item) => (
             <div
               key={item.id}

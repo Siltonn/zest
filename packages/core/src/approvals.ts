@@ -2,6 +2,7 @@ import { and, desc, eq, inArray, schema, sql, type Database } from "@zest/db";
 import type { Actor, PostContent } from "@zest/shared";
 import { transition } from "./state-machine.ts";
 import * as changeRequests from "./change-requests.ts";
+import * as plans from "./plans.ts";
 
 /**
  * The approval inbox.
@@ -12,7 +13,12 @@ import * as changeRequests from "./change-requests.ts";
  * hidden inside an agent framework's checkpoint.
  */
 
-export type InboxItemKind = "post" | "reply" | "memory" | "autonomy_request";
+export type InboxItemKind =
+  | "post"
+  | "reply"
+  | "memory"
+  | "autonomy_request"
+  | "plan";
 
 export type InboxItem = {
   id: string;
@@ -31,6 +37,20 @@ export type InboxItem = {
   context?: { author: string; text: string; sentiment?: string | null };
   /** Present on memory proposals: the document as it stands today. */
   before?: string | null;
+  /**
+   * Present on plan cards: the topics waiting to be written.
+   *
+   * One card per plan rather than one per topic — a week of content is twenty
+   * items, and twenty cards would bury the posts and replies that share this
+   * inbox. Deciding on the shape of a week is one decision, so it is one card.
+   */
+  planItems?: {
+    id: string;
+    topic: string;
+    angle: string | null;
+    accountHandle: string;
+    suggestedSlotAt: Date | null;
+  }[];
 };
 
 export async function listInbox(
@@ -154,7 +174,37 @@ export async function listInbox(
     },
   }));
 
-  return [...posts, ...replies, ...changes].sort(
+  // A plan with nothing written yet is a decision waiting to be made: approve
+  // the shape of the week, or drop topics, before anyone spends a model call
+  // turning them into drafts.
+  const planCards: InboxItem[] = [];
+  for (const plan of await plans.listPlans(db, workspaceId)) {
+    if (plan.status !== "active" || plan.itemCounts.planned === 0) continue;
+
+    const detail = await plans.readPlan(db, workspaceId, plan.id);
+    const waiting = (detail?.items ?? []).filter((i) => i.status === "planned");
+    if (waiting.length === 0) continue;
+
+    planCards.push({
+      id: plan.id,
+      kind: "plan",
+      workspaceId,
+      title: `${waiting.length} post${waiting.length === 1 ? "" : "s"} planned for "${plan.name}"`,
+      body: plan.objective ?? "",
+      reasoning: null,
+      agentRunId: waiting[0]?.agentRunId ?? null,
+      createdAt: waiting[0]?.createdAt ?? plan.updatedAt,
+      planItems: waiting.map((item) => ({
+        id: item.id,
+        topic: item.topic,
+        angle: item.angle,
+        accountHandle: accountsById.get(item.accountId)?.handle ?? "unknown",
+        suggestedSlotAt: item.suggestedSlotAt,
+      })),
+    });
+  }
+
+  return [...posts, ...replies, ...changes, ...planCards].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
 }
@@ -179,7 +229,13 @@ export async function inboxCount(db: Database, workspaceId: string): Promise<num
       ),
     );
   const changeCount = await changeRequests.pendingCount(db, workspaceId);
-  return (postCount?.n ?? 0) + (replyCount?.n ?? 0) + changeCount;
+
+  // Counted per plan, matching the one-card-per-plan shape above.
+  const planCount = (await plans.listPlans(db, workspaceId)).filter(
+    (plan) => plan.status === "active" && plan.itemCounts.planned > 0,
+  ).length;
+
+  return (postCount?.n ?? 0) + (replyCount?.n ?? 0) + changeCount + planCount;
 }
 
 /**

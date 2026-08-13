@@ -110,7 +110,7 @@ export type Post = {
 
 export type InboxItem = {
   id: string;
-  kind: "post" | "reply" | "memory" | "autonomy_request";
+  kind: "post" | "reply" | "memory" | "autonomy_request" | "plan";
   title: string;
   body: string;
   accountHandle?: string;
@@ -122,6 +122,14 @@ export type InboxItem = {
   context?: { author: string; text: string; sentiment?: string | null };
   /** Memory proposals only: the document as it stands, for the diff. */
   before?: string | null;
+  /** Plan cards only: the topics waiting to be written. */
+  planItems?: {
+    id: string;
+    topic: string;
+    angle: string | null;
+    accountHandle: string;
+    suggestedSlotAt: string | null;
+  }[];
 };
 
 export type OnboardingStep = {

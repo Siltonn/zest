@@ -1,3 +1,5 @@
+import { createTransport, type Transporter } from "nodemailer";
+import type SMTPTransport from "nodemailer/lib/smtp-transport/index.js";
 import { and, eq, schema, type Database } from "@zest/db";
 
 /**
@@ -201,14 +203,71 @@ function inQuietHours(target: NotificationTarget, now: Date): boolean {
     : hour >= quiet.start || hour < quiet.end;
 }
 
+/**
+ * Plain SMTP, for self-hosters who would rather not add a SaaS dependency —
+ * and for the demo, where Docker Compose already runs Mailpit on 1025 and the
+ * approval mail should actually arrive somewhere you can open.
+ */
+export class SmtpProvider implements NotificationProvider {
+  readonly id = "smtp";
+  readonly #from: string;
+  readonly #options: SMTPTransport.Options;
+  #transport: Transporter | undefined;
+
+  constructor(options: SMTPTransport.Options, from: string) {
+    this.#options = options;
+    this.#from = from;
+  }
+
+  async send(target: NotificationTarget, payload: NotificationPayload): Promise<void> {
+    const to = target.config.email;
+    if (!to) return;
+
+    // Created lazily and reused: building a transport per message would open a
+    // fresh connection for every approval notice.
+    this.#transport ??= createTransport(this.#options);
+
+    await this.#transport.sendMail({
+      from: this.#from,
+      to,
+      subject: payload.title,
+      html: renderEmail(payload),
+      text: `${payload.title}\n\n${payload.body}${payload.url ? `\n\n${payload.url}` : ""}`,
+    });
+  }
+}
+
 export function createMailProvider(
   provider: "resend" | "smtp" | "console",
-  config: { apiKey?: string; from?: string },
+  config: {
+    apiKey?: string;
+    from?: string;
+    host?: string;
+    port?: number;
+    user?: string;
+    pass?: string;
+  },
 ): NotificationProvider {
   if (provider === "resend" && config.apiKey) {
     return new ResendProvider(config.apiKey, config.from ?? "Zest <zest@resend.dev>");
   }
-  // SMTP intentionally falls back to console until a self-hoster wires nodemailer;
-  // silently dropping approval notices would be worse than printing them.
+
+  if (provider === "smtp" && config.host) {
+    return new SmtpProvider(
+      {
+        host: config.host,
+        port: config.port ?? 1025,
+        // Mailpit and most local relays speak plaintext; anything on 465 will
+        // not, so infer rather than making the operator set a third variable.
+        secure: config.port === 465,
+        ...(config.user
+          ? { auth: { user: config.user, pass: config.pass ?? "" } }
+          : {}),
+      },
+      config.from ?? "Zest <zest@localhost>",
+    );
+  }
+
+  // Printing beats silently dropping an approval notice.
   return new ConsoleProvider();
 }

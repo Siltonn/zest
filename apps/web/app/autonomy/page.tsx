@@ -9,6 +9,12 @@ type AutonomyResponse = { rules: AutonomyRule[]; trust: TrustStat[] };
 
 const ACTIONS = [
   {
+    id: "write_plan",
+    label: "Write planned weeks",
+    blurb:
+      "Send a planned week straight to the copywriter. Without this the topics wait in your inbox first — the cheapest place to change your mind.",
+  },
+  {
     id: "schedule_post",
     label: "Schedule posts",
     blurb: "Publish on the proposed time without asking first.",

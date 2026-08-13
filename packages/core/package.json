@@ -21,10 +21,12 @@
     "@zest/db": "workspace:*",
     "@zest/shared": "workspace:*",
     "drizzle-orm": "^0.45.2",
+    "nodemailer": "^9.0.5",
     "zod": "^4.1.13"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@types/nodemailer": "^8.0.1",
     "typescript": "^5.7.2"
   }
 }

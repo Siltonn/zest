@@ -63,9 +63,14 @@ one sees only what it should".
 
 - **Posts can explain themselves.** `plan_items.postId` links a published post back to
   the intention that produced it, and to the run that wrote it.
-- **A cheaper review altitude exists.** Dropping a topic before anyone writes it is a
-  click on `/plans`; reviewing six finished drafts is not. The expensive altitude (the
-  approval inbox) still exists for the copy itself.
+- **A cheaper review altitude exists, and it runs through the same guard as everything
+  else.** `write_plan` is an autonomy action: with no rule granted, a planned week lands
+  in the inbox as one card — topics grouped by account, each droppable — and the
+  copywriter only runs once it is approved. Grant the rule and the same stage goes
+  straight to the writers. Deciding on six topics costs a fraction of reading six
+  finished drafts, and dropping one saves the model call that would have written it.
+  One card per plan rather than one per topic, or a week of content would bury the posts
+  and replies sharing that inbox.
 - **An item stops being pending the moment it is written**, so a retried copy stage
   cannot double-post. This is the same conditional-claim instinct as publishing, one
   layer up.
