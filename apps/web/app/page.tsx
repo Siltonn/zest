@@ -73,9 +73,11 @@ export default function DashboardPage() {
 
   const { data: me } = useQuery({
     queryKey: ["me"],
-    queryFn: () => api.get<{ capabilities: { llm: boolean } }>("/me"),
+    queryFn: () => api.get<{ capabilities?: { llm: boolean } }>("/me"),
   });
-  const canThink = me?.capabilities.llm ?? true;
+  // Assume it can until told otherwise, so a slow or older API never disables
+  // the controls it is meant to explain.
+  const canThink = me?.capabilities?.llm ?? true;
 
   // The agent runs on the queue, so the answer arrives later. Saying so beats
   // a button that appears to do nothing.
@@ -128,18 +130,13 @@ export default function DashboardPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Segmented value={days} onChange={setDays} options={WINDOWS} />
-          <Button
-            onPress={() => plan.mutate()}
-            isPending={plan.isPending}
-            isDisabled={!canThink}
-          >
+          <Button onPress={() => plan.mutate()} isPending={plan.isPending}>
             Run planning
           </Button>
           <Button
             variant="secondary"
             onPress={() => analyze.mutate()}
             isPending={analyze.isPending}
-            isDisabled={!canThink}
           >
             Weekly report
           </Button>
@@ -150,12 +147,13 @@ export default function DashboardPage() {
         <Card className="border-l-4 border-l-default-400">
           <Card.Content className="py-4">
             <div className="font-medium">The agent cannot think yet</div>
-            <div className="text-sm opacity-60">
+            <div className="mt-0.5 text-sm opacity-60">
               Publishing, scheduling, the simulated audience and analytics all work
-              without a key. Planning, drafting and reply triage need one — set
-              <code className="mx-1">ANTHROPIC_API_KEY</code> in <code>.env</code> and
-              restart.
+              without a key. Planning, drafting and reply triage need one.
             </div>
+            <pre className="mt-2 overflow-x-auto rounded-lg bg-default-100 px-3 py-2 text-xs">
+              {"# .env\nANTHROPIC_API_KEY=sk-ant-…\n\ndocker compose restart server"}
+            </pre>
           </Card.Content>
         </Card>
       )}

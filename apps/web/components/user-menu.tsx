@@ -1,6 +1,6 @@
 "use client";
 
-import { Avatar, Dropdown, Header, Separator } from "@heroui/react";
+import { Avatar, Dropdown } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
@@ -76,27 +76,21 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
 
       <Dropdown.Popover placement="top start" className="w-56">
         <Dropdown.Menu>
-          <Dropdown.Section>
-            <Header className="px-2 py-1 text-xs opacity-45">Theme</Header>
-            {THEMES.map((option) => (
-              <Dropdown.Item
-                key={option.id}
-                id={option.id}
-                onAction={() => setTheme(option.id)}
-              >
-                <option.icon className="size-4 opacity-70" />
-                <span className="flex-1">{option.label}</span>
-                {theme === option.id && <CheckIcon className="size-4" />}
-              </Dropdown.Item>
-            ))}
-          </Dropdown.Section>
-
-          <Dropdown.Section>
-            <Dropdown.Item id="sign-out" onAction={signOut}>
-              <SignOutIcon className="size-4 opacity-70" />
-              Sign out
+          {THEMES.map((option) => (
+            <Dropdown.Item
+              key={option.id}
+              id={option.id}
+              onAction={() => setTheme(option.id)}
+            >
+              <option.icon className="size-4 opacity-70" />
+              <span className="flex-1">{option.label}</span>
+              {theme === option.id && <CheckIcon className="size-4" />}
             </Dropdown.Item>
-          </Dropdown.Section>
+          ))}
+          <Dropdown.Item id="sign-out" onAction={signOut}>
+            <SignOutIcon className="size-4 opacity-70" />
+            Sign out
+          </Dropdown.Item>
         </Dropdown.Menu>
       </Dropdown.Popover>
     </Dropdown>

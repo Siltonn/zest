@@ -15,8 +15,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
+    // Nest returns { message, error, statusCode }. Surfacing the raw body puts
+    // JSON in front of the user; the message is the part written for them.
     const body = await res.text();
-    throw new Error(body || `${res.status} ${res.statusText}`);
+    let message = body || `${res.status} ${res.statusText}`;
+    try {
+      const parsed = JSON.parse(body) as { message?: string | string[] };
+      if (parsed.message) {
+        message = Array.isArray(parsed.message)
+          ? parsed.message.join("; ")
+          : parsed.message;
+      }
+    } catch {
+      // Not JSON — the raw text is the best we have.
+    }
+    throw new Error(message);
   }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
