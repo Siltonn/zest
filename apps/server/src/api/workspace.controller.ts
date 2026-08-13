@@ -19,7 +19,6 @@ import { analytics, audit, autonomy, memory } from "@zest/core";
 import { getConnector, listConnectorMeta } from "@zest/connectors";
 import { getTokenVault } from "@zest/shared";
 import { advanceClock, ONE_SIM_DAY, readClock } from "@zest/simulator";
-import { NoModelConfiguredError, runChat } from "@zest/agent";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
@@ -375,35 +374,6 @@ export class WorkspaceController {
       workspaceId: req.workspaceId,
     });
     return { queued: true, jobId: job.id };
-  }
-
-  /**
-   * Chat runs inline rather than on the queue: the operator is sitting there
-   * waiting for the answer, and a run started from here is short by nature.
-   * It uses the same tools and the same autonomy guard as the cron runs, so
-   * asking for a draft still produces a proposal rather than a live post.
-   */
-  @Post("agent/chat")
-  async chat(@Req() req: AuthedRequest, @Body() body: unknown) {
-    const input = z
-      .object({ message: z.string().min(1), accountId: z.string().uuid().optional() })
-      .parse(body);
-
-    try {
-      return await runChat({
-        db: this.db,
-        workspaceId: req.workspaceId,
-        publisher: this.redis,
-        message: input.message,
-        accountId: input.accountId,
-        trigger: req.actor.kind === "mcp" ? "mcp" : "chat",
-      });
-    } catch (error) {
-      if (error instanceof NoModelConfiguredError) {
-        throw new BadRequestException(error.message);
-      }
-      throw error;
-    }
   }
 
   /**

@@ -258,7 +258,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex gap-6 px-8 py-6">
+          <div className="mx-auto flex w-full max-w-[1600px] gap-6 px-8 py-6">
             <div className="min-w-0 flex-1">{children}</div>
 
             {activity.length > 0 && (

@@ -263,10 +263,26 @@ export async function runAnalysis(
   }
 }
 
-/** One-shot chat turn. Same tools, same guard — only the trigger differs. */
+/**
+ * A chat turn. Same tools and the same autonomy guard as the scheduled runs —
+ * asking for a draft here still produces a proposal, not a live post.
+ *
+ * Prior turns are passed in so follow-ups work ("make that shorter" needs to
+ * know what "that" was), and the tools that ran come back out so the UI can
+ * show its work rather than an unexplained answer.
+ */
 export async function runChat(
-  options: RunOptions & { message: string; accountId?: string; trigger?: TriggerName },
-): Promise<{ runId: string; reply: string }> {
+  options: RunOptions & {
+    message: string;
+    accountId?: string;
+    trigger?: TriggerName;
+    history?: string;
+  },
+): Promise<{
+  runId: string;
+  reply: string;
+  toolCalls: { tool: string; summary?: string }[];
+}> {
   const { db, workspaceId } = options;
 
   if (!hasModelAccess()) throw new NoModelConfiguredError();
@@ -281,16 +297,38 @@ export async function runChat(
 
   try {
     const context = await memory.buildContext(db, workspaceId, options.accountId);
+    const conversation = options.history
+      ? `\n\n## Conversation so far\n\n${options.history}`
+      : "";
+
     const result = await runRole(
       options,
       "assistant",
-      `${context}\n\n## Message from the operator\n\n${options.message}`,
+      `${context}${conversation}\n\n## Message from the operator\n\n${options.message}`,
       handle.id,
     );
+
     await finishRun(db, handle, { transcript: result.transcript });
-    return { runId: handle.id, reply: result.text };
+    return {
+      runId: handle.id,
+      reply: result.text,
+      toolCalls: toolCallsFrom(result.transcript),
+    };
   } catch (error) {
     await finishRun(db, handle, { error: (error as Error).message });
     throw error;
   }
+}
+
+
+/** Flattens a transcript into the list of tools that actually ran. */
+function toolCallsFrom(transcript: unknown[]): { tool: string; summary?: string }[] {
+  const calls: { tool: string; summary?: string }[] = [];
+  for (const step of transcript) {
+    const s = step as { toolCalls?: { tool?: string }[] };
+    for (const call of s.toolCalls ?? []) {
+      if (call.tool) calls.push({ tool: call.tool });
+    }
+  }
+  return calls;
 }

@@ -93,7 +93,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
+    <div className="mx-auto max-w-4xl space-y-5">
       <header>
         <h1 className="text-2xl font-semibold">Settings</h1>
       </header>

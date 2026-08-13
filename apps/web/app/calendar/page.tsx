@@ -24,6 +24,7 @@ export default function CalendarPage() {
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
   const [selected, setSelected] = useState<string | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const { data: posts = [], isLoading } = useQuery({
     queryKey: ["posts"],
@@ -52,7 +53,7 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
+    <div className="mx-auto max-w-none space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
@@ -107,11 +108,11 @@ export default function CalendarPage() {
 
       <div className="flex gap-4">
         {unscheduled.length > 0 && (
-          <Card className="w-56 shrink-0">
+          <Card className="w-64 shrink-0 self-start">
             <Card.Header>
               <Card.Title className="text-sm">Needs a time</Card.Title>
               <Card.Description className="text-xs">
-                Approved but not scheduled — drag one onto a day
+                Approved but unscheduled — drag onto a day
               </Card.Description>
             </Card.Header>
             <Card.Content className="space-y-2">
@@ -128,65 +129,106 @@ export default function CalendarPage() {
         )}
 
         <Card className="min-w-0 flex-1">
-          <Card.Content className="p-3">
-            <div className="mb-1 grid grid-cols-7 gap-1.5">
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((name) => (
-                <div
-                  key={name}
-                  className="px-1 pb-1 text-xs font-medium uppercase tracking-wide opacity-40"
-                >
-                  {name}
+          <Card.Content className="p-4">
+            <div className="mb-2 grid grid-cols-7 gap-2">
+              {[
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday",
+              ].map((name) => (
+                <div key={name} className="px-1 text-xs font-medium opacity-45">
+                  <span className="hidden xl:inline">{name}</span>
+                  <span className="xl:hidden">{name.slice(0, 3)}</span>
                 </div>
               ))}
             </div>
 
             {isLoading ? (
-              <div className="grid grid-cols-7 gap-1.5">
+              <div className="grid grid-cols-7 gap-2">
                 {Array.from({ length: 35 }, (_, i) => (
-                  <Skeleton key={i} className="h-24 rounded-lg" />
+                  <Skeleton key={i} className="h-36 rounded-xl" />
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-7 gap-1.5">
+              <div className="grid grid-cols-7 gap-2">
                 {days.map((day) => {
-                  const dayPosts = dated.filter((p) =>
-                    sameDay(new Date(p.scheduledAt ?? p.publishedAt ?? ""), day),
-                  );
+                  const dayPosts = dated
+                    .filter((p) =>
+                      sameDay(new Date(p.scheduledAt ?? p.publishedAt ?? ""), day),
+                    )
+                    .sort((a, b) =>
+                      (a.scheduledAt ?? a.publishedAt ?? "").localeCompare(
+                        b.scheduledAt ?? b.publishedAt ?? "",
+                      ),
+                    );
                   const outside =
                     view === "month" && day.getMonth() !== anchor.getMonth();
+                  const cellKey = day.toISOString();
+                  // A week column has room for everything; a month cell does not.
+                  const showAll = expanded === cellKey || view === "week";
+                  const visible = showAll ? dayPosts : dayPosts.slice(0, 2);
 
                   return (
                     <div
-                      key={day.toISOString()}
+                      key={cellKey}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={() => move(day)}
-                      className={`rounded-lg border p-1.5 transition-colors ${
-                        view === "month" ? "min-h-24" : "min-h-64"
+                      className={`flex flex-col rounded-xl border p-2 transition-colors ${
+                        view === "month" ? "min-h-36" : "min-h-[26rem]"
                       } ${
                         isToday(day)
-                          ? "border-warning/60 bg-warning/5"
+                          ? "border-warning/50 bg-warning/[0.04]"
                           : "border-default-200/60"
-                      } ${outside ? "opacity-35" : ""} ${
-                        dragging ? "hover:border-warning hover:bg-warning/10" : ""
+                      } ${outside ? "opacity-30" : ""} ${
+                        dragging
+                          ? "border-dashed hover:border-warning hover:bg-warning/10"
+                          : ""
                       }`}
                     >
-                      <div className="mb-1 px-0.5 text-xs tabular-nums opacity-50">
-                        {day.getDate()}
+                      <div className="mb-1.5 flex items-center justify-between px-0.5">
+                        <span
+                          className={`text-sm tabular-nums ${
+                            isToday(day) ? "font-semibold text-warning" : "opacity-55"
+                          }`}
+                        >
+                          {day.getDate()}
+                        </span>
+                        {dayPosts.length > 0 && (
+                          <span className="text-xs tabular-nums opacity-35">
+                            {dayPosts.length}
+                          </span>
+                        )}
                       </div>
-                      <div className="space-y-1">
-                        {dayPosts.slice(0, view === "month" ? 3 : 12).map((post) => (
+                      <div className="flex-1 space-y-1.5">
+                        {visible.map((post) => (
                           <PostChip
                             key={post.id}
                             post={post}
-                            compact
                             onOpen={() => setSelected(post.id)}
                             onDragStart={() => setDragging(post.id)}
                           />
                         ))}
-                        {view === "month" && dayPosts.length > 3 && (
-                          <div className="px-1 text-xs opacity-40">
-                            +{dayPosts.length - 3} more
-                          </div>
+                        {!showAll && dayPosts.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => setExpanded(cellKey)}
+                            className="w-full rounded-md px-1.5 py-1 text-left text-xs opacity-50 hover:bg-default-100 hover:opacity-80"
+                          >
+                            +{dayPosts.length - 2} more
+                          </button>
+                        )}
+                        {expanded === cellKey && (
+                          <button
+                            type="button"
+                            onClick={() => setExpanded(null)}
+                            className="w-full rounded-md px-1.5 py-1 text-left text-xs opacity-50 hover:bg-default-100 hover:opacity-80"
+                          >
+                            Show less
+                          </button>
                         )}
                       </div>
                     </div>
@@ -214,46 +256,71 @@ export default function CalendarPage() {
   );
 }
 
+/**
+ * A post on the grid. Leads with the time and the handle, because "which
+ * account, when" is what you scan a calendar for — the text is secondary.
+ */
 function PostChip({
   post,
-  compact,
   onOpen,
   onDragStart,
 }: {
   post: Post;
-  compact?: boolean;
   onOpen: () => void;
   onDragStart: () => void;
 }) {
   const meta = STATUS_META[post.status];
+  const at = post.scheduledAt ?? post.publishedAt;
+
   return (
-    <Tooltip delay={400}>
+    <Tooltip delay={500}>
       <Tooltip.Trigger>
         <button
           type="button"
           draggable={post.status !== "published"}
           onDragStart={onDragStart}
           onClick={onOpen}
-          className="w-full cursor-grab rounded-md bg-default-100/70 px-1.5 py-1 text-left text-xs transition-colors hover:bg-default-200/70 active:cursor-grabbing"
+          className="w-full rounded-lg border border-default-200/50 bg-default-50/60 p-2 text-left transition-colors hover:border-default-300 hover:bg-default-100"
         >
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <span className={`size-1.5 shrink-0 rounded-full ${meta.dot}`} />
-            <span className="truncate opacity-50">@{post.account.handle}</span>
+            {at && (
+              <span className="text-xs font-medium tabular-nums">
+                {formatTime(at)}
+              </span>
+            )}
+            {/* The avatar says which account in a fraction of the width a
+                truncated handle needs, and reads faster besides. */}
+            {post.account.avatarUrl && (
+              <img
+                src={post.account.avatarUrl}
+                alt={`@${post.account.handle}`}
+                className="ml-auto size-4 shrink-0 rounded-full"
+              />
+            )}
           </div>
-          <div className={compact ? "line-clamp-2" : "line-clamp-3"}>
+          <div className="mt-1 line-clamp-2 text-xs leading-snug opacity-85">
             {post.content.text}
           </div>
         </button>
       </Tooltip.Trigger>
-      <Tooltip.Content className="max-w-72">
-        <p className="text-xs">{post.content.text}</p>
-        <p className="mt-1 text-xs opacity-60">
-          {meta.label}
-          {post.scheduledAt && ` · ${formatDateTime(post.scheduledAt)}`}
+      <Tooltip.Content className="max-w-80">
+        <p className="text-xs leading-relaxed">{post.content.text}</p>
+        <p className="mt-1.5 text-xs opacity-60">
+          @{post.account.handle} · {meta.label}
+          {at && ` · ${formatDateTime(at)}`}
         </p>
       </Tooltip.Content>
     </Tooltip>
   );
+}
+
+/** Compact enough for a calendar cell: "9:30am", not "9:30 AM". */
+function formatTime(iso: string): string {
+  return new Date(iso)
+    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    .replace(" ", "")
+    .toLowerCase();
 }
 
 // ── Date helpers ─────────────────────────────────────────────────────────

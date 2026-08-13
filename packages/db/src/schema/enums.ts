@@ -91,3 +91,5 @@ export const automationKindEnum = pgEnum("automation_kind", [
   "auto_reply",
   "auto_dm",
 ]);
+
+export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);

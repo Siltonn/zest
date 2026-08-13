@@ -60,7 +60,7 @@ export default function PomeloPage() {
   });
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-none">
       <header className="mb-6 flex items-center gap-3">
         <span className="text-3xl">🍊</span>
         <div>

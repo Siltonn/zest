@@ -97,7 +97,7 @@ export default function InboxPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-4xl">
       <header className="mb-6 flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Inbox</h1>

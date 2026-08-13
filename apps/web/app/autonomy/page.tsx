@@ -68,7 +68,7 @@ export default function AutonomyPage() {
   const platforms = [...new Set(accounts.map((a) => a.connectorId))];
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto max-w-4xl space-y-5">
       <header>
         <h1 className="text-2xl font-semibold">Autonomy</h1>
         <p className="text-sm opacity-60">

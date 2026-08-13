@@ -43,7 +43,7 @@ export default function AuditPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
+    <div className="mx-auto max-w-5xl space-y-5">
       <header>
         <h1 className="text-2xl font-semibold">Audit</h1>
         <p className="text-sm opacity-60">

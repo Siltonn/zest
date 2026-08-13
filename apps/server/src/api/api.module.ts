@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { ChatController } from "./chat.controller.js";
 import { EventsController } from "./events.controller.js";
 import { HealthController } from "./health.controller.js";
 import { LabController } from "./lab.controller.js";
@@ -19,6 +20,7 @@ import { PomeloController } from "../pomelo/pomelo.controller.js";
     PostsController,
     WorkspaceController,
     LabController,
+    ChatController,
     MediaController,
     EventsController,
     McpController,
