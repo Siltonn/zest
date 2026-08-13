@@ -9,8 +9,9 @@ from an inbox, posts publish on schedule, a simulated audience reacts on a belie
 engagement curve, and the agent reads the results and adjusts. No platform application
 review, no per-post API billing, no waiting.
 
-> **Status: M0 (skeleton).** The monorepo, database schema, backend roles and queue
-> topology are in place. See [Roadmap](#roadmap) for what lands when.
+> **Status: feature-complete and verified end to end.** A post scheduled through the UI
+> publishes to Pomelo over HTTP, a simulated day produces believable engagement, and that
+> engagement flows back into analytics and the reply queue. See [the demo script](docs/demo.md).
 
 ## Why not just another scheduler
 
@@ -87,7 +88,15 @@ database, not the queue — losing Redis costs you a retry, never a duplicate po
 TypeScript · Next.js 16 + HeroUI · NestJS 11 · Postgres + Drizzle · Redis + BullMQ ·
 Better Auth · Mastra (on Vercel AI SDK, so any provider works) · MCP
 
-Design decisions and the arguments behind them are recorded in [`docs/adr/`](docs/adr/).
+Design decisions and the arguments behind them are recorded in [`docs/adr/`](docs/adr/):
+
+- [001 — Agent framework](docs/adr/001-agent-framework.md): why Mastra, and why not LangGraph
+- [002 — Publishing exactly once](docs/adr/002-scheduling-correctness.md): the claim that
+  makes the scheduler trustworthy, and the two bugs found proving it
+- [003 — Graduated autonomy](docs/adr/003-graduated-autonomy.md): why approval is domain
+  data rather than a paused agent
+
+There is also an [eight-minute demo script](docs/demo.md).
 
 ## Extension points
 
@@ -107,14 +116,17 @@ Every one of these is "add one file", by design:
 | | Milestone | Ships |
 |---|---|---|
 | ✅ | **M0** Skeleton | Monorepo, schema, server roles, queue topology, Docker Compose |
-| | **M1** Pomelo + simulator | The simulated network, personas, engagement curves, fast-forward |
-| | **M2** Platform core | Connectors, state machine, audit, composer, calendar, scheduler, analytics |
-| | **M3** Agent core | Agent runtime, tools, layered memory, planning runs, approval inbox |
-| | **M4** Full loop + HITL | Reply triage, analysis runs, autonomy rules, notifications |
-| | **M5** Reach + polish | Bluesky, Mastodon, REST API, MCP server, tests, docs |
-| | **M6** Engagement automation | Auto-plug, auto-reply, auto-DM — all autonomy-gated |
-| | **M7** Agent team | Researcher → strategist → copywriter pipeline, team view |
-| | **M8** Content wind tunnel | Pre-publish A/B against the simulated audience |
+| ✅ | **M1** Pomelo + simulator | The simulated network, personas, engagement curves, fast-forward |
+| ✅ | **M2** Platform core | Connectors, state machine, audit, composer, calendar, scheduler, analytics |
+| ✅ | **M3** Agent core | Agent runtime, tools, layered memory, planning runs, approval inbox |
+| ✅ | **M4** Full loop + HITL | Reply triage, analysis runs, autonomy rules, notifications |
+| ✅ | **M5** Reach + polish | Bluesky, Mastodon, REST API, MCP server, tests, docs |
+| ✅ | **M6** Engagement automation | Auto-plug, auto-reply, auto-DM — all autonomy-gated |
+| ✅ | **M7** Agent team | Researcher → strategist → copywriter pipeline, team view |
+| ✅ | **M8** Content wind tunnel | Pre-publish A/B against the simulated audience |
+
+Next: Threads and X connectors, outbound webhooks, a CLI, and draft comments so an agent and
+a human can discuss a post before it ships.
 
 ## License
 
