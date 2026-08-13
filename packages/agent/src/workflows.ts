@@ -99,6 +99,13 @@ export async function runResearch(options: RunOptions): Promise<ResearchResult> 
     model: options.model,
   });
 
+  // The cycle is named after the run that starts it, so every later stage can
+  // point back without a separate table.
+  await db
+    .update(schema.agentRuns)
+    .set({ cycleId: handle.id })
+    .where(eq(schema.agentRuns.id, handle.id));
+
   try {
     const context = await memory.buildContext(db, workspaceId);
     await reportProgress(handle, "researching", "Looking at trends and recent performance", "researcher");
@@ -129,7 +136,7 @@ export async function runResearch(options: RunOptions): Promise<ResearchResult> 
  * not prose — which is what makes it reviewable before anything is written.
  */
 export async function runStrategy(
-  options: RunOptions & { planId: string; briefing: string },
+  options: RunOptions & { planId: string; briefing: string; cycleId?: string },
 ): Promise<StrategyResult> {
   const { db, workspaceId, planId } = options;
 
@@ -148,6 +155,7 @@ export async function runStrategy(
     trigger: "cron_plan",
     role: "strategist",
     planId,
+    cycleId: options.cycleId ?? null,
     publisher: options.publisher,
     model: options.model,
   });
@@ -215,7 +223,7 @@ export async function runStrategy(
  * costs a little more and keeps them apart.
  */
 export async function runCopy(
-  options: RunOptions & { planId: string; accountId: string },
+  options: RunOptions & { planId: string; accountId: string; cycleId?: string },
 ): Promise<CopyResult> {
   const { db, workspaceId, planId, accountId } = options;
 
@@ -238,6 +246,7 @@ export async function runCopy(
     role: "copywriter",
     planId,
     accountId,
+    cycleId: options.cycleId ?? null,
     publisher: options.publisher,
     model: options.model,
   });

@@ -203,6 +203,8 @@ export type AgentRun = {
   /** Which programme this stage served, and the account it wrote for. */
   planId: string | null;
   accountId: string | null;
+  /** Ties the stages of one planning cycle together. */
+  cycleId: string | null;
   output: string | null;
   trigger: string;
   status: string;

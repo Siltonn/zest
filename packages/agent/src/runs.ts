@@ -36,6 +36,8 @@ export async function startRun(
     /** Which programme this stage serves, and the account it writes for. */
     planId?: string | null;
     accountId?: string | null;
+    /** Absent on a research run, which becomes the cycle id for the rest. */
+    cycleId?: string | null;
   },
 ): Promise<RunHandle> {
   const [run] = await db
@@ -48,6 +50,7 @@ export async function startRun(
       role: input.role && input.role !== "assistant" ? input.role : null,
       planId: input.planId ?? null,
       accountId: input.accountId ?? null,
+      cycleId: input.cycleId ?? null,
       model: input.model ?? null,
       status: "running",
     })

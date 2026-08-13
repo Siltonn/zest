@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ChangeEvent } from "react";
 import { api, type Account, type MemoryDoc } from "@/lib/api";
 import { DiffView } from "@/components/diff";
-import { Segmented } from "@/components/segmented";
+import { AccountSwitcher } from "@/components/account-switcher";
 import { describeActor, relativeTime } from "@/lib/format";
 
 type MemoryResponse = {
@@ -113,14 +113,10 @@ export default function MemoryPage() {
         </p>
       </header>
 
-      <Segmented
-        value={accountId ?? "workspace"}
-        onChange={(value) => setAccountId(value === "workspace" ? null : value)}
-        options={[
-          { id: "workspace", label: "Workspace" },
-          ...accounts.map((a) => ({ id: a.id, label: `@${a.handle}` })),
-        ]}
-        size="md"
+      <AccountSwitcher
+        value={accountId}
+        onChange={setAccountId}
+        workspaceLabel="Workspace memory"
       />
 
       {docs.map(({ kind, title, blurb, doc }) => (

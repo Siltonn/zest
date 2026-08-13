@@ -1,35 +1,17 @@
 "use client";
 
-import { Card, Chip, Spinner } from "@heroui/react";
+import { Alert, Card, Chip, Spinner } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { api, type Account, type AgentRun } from "@/lib/api";
+import {
+  CyclePipeline,
+  ROLE_META,
+  groupIntoCycles,
+} from "@/components/cycle-pipeline";
+import { useLiveEvents } from "@/lib/events";
 import { formatDateTime, relativeTime } from "@/lib/format";
-
-const ROLES: Record<string, { label: string; blurb: string; icon: string }> = {
-  researcher: {
-    label: "Researcher",
-    blurb: "Finds what is worth talking about",
-    icon: "🔍",
-  },
-  strategist: {
-    label: "Strategist",
-    blurb: "Turns research into a weekly plan",
-    icon: "🗺",
-  },
-  copywriter: { label: "Copywriter", blurb: "Writes the posts", icon: "✍" },
-  community: {
-    label: "Community manager",
-    blurb: "Triages replies and drafts responses",
-    icon: "💬",
-  },
-  analyst: {
-    label: "Analyst",
-    blurb: "Reviews performance and updates what we learned",
-    icon: "📊",
-  },
-};
 
 type TranscriptStep = {
   text?: string;
@@ -57,10 +39,14 @@ function TeamView() {
   const params = useSearchParams();
   const [selected, setSelected] = useState<string | null>(params.get("run"));
 
+  const { lastRun } = useLiveEvents();
+
   const { data: runs = [], isLoading } = useQuery({
     queryKey: ["runs"],
     queryFn: () => api.get<AgentRun[]>("/runs"),
-    refetchInterval: 15_000,
+    // Poll quickly only while something is actually running; a cycle that takes
+    // minutes should not look frozen, and an idle page should not busy-loop.
+    refetchInterval: lastRun ? 3_000 : 30_000,
   });
 
   const { data: accounts = [] } = useQuery({
@@ -94,7 +80,7 @@ function TeamView() {
       </header>
 
       <div className="grid gap-2 md:grid-cols-5">
-        {Object.entries(ROLES).map(([id, role]) => (
+        {Object.entries(ROLE_META).map(([id, role]) => (
           <Card key={id}>
             <Card.Content className="py-3">
               <div className="text-lg">{role.icon}</div>
@@ -106,53 +92,27 @@ function TeamView() {
       </div>
 
       <div className="flex gap-4">
-        <div className="w-72 shrink-0 space-y-1.5">
+        <div className="w-72 shrink-0 space-y-3">
           <div className="text-xs font-medium uppercase tracking-wide opacity-50">
-            Recent runs
+            Recent cycles
           </div>
           {runs.length === 0 && (
             <p className="text-sm opacity-50">
-              No runs yet. Start one from the dashboard.
+              No runs yet. Start one from a plan.
             </p>
           )}
-          {runs.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setSelected(item.id)}
-              className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                selected === item.id
-                  ? "border-default-400 bg-default-100/70"
-                  : "border-default-200/60 hover:bg-default-100/50"
-              }`}
+          {groupIntoCycles(runs).map((cycle) => (
+            <div
+              key={cycle.id}
+              className="rounded-xl border border-default-200/50 p-2"
             >
-              <div className="flex items-center gap-1.5">
-                <span>{item.role ? ROLES[item.role]?.icon : "◍"}</span>
-                <span className="font-medium">
-                  {item.role ? ROLES[item.role]?.label : "Assistant"}
-                </span>
-                {item.accountId && (
-                  <span className="text-xs opacity-50">
-                    @{accounts.find((a) => a.id === item.accountId)?.handle ?? "?"}
-                  </span>
-                )}
-                <Chip
-                  size="sm"
-                  variant="soft"
-                  color={
-                    item.status === "failed"
-                      ? "danger"
-                      : item.status === "running"
-                        ? "warning"
-                        : "success"
-                  }
-                >
-                  {item.status}
-                </Chip>
-              </div>
-              <div className="text-xs opacity-40">
-                {item.trigger.replace(/_/g, " ")} · {relativeTime(item.startedAt)}
-              </div>
-            </button>
+              <CyclePipeline
+                cycle={cycle}
+                accounts={accounts}
+                selectedRunId={selected}
+                onSelect={setSelected}
+              />
+            </div>
           ))}
         </div>
 
@@ -161,7 +121,7 @@ function TeamView() {
             <Card>
               <Card.Header>
                 <Card.Title className="text-base">
-                  {run.role ? ROLES[run.role]?.label : "Assistant"} run
+                  {run.role ? ROLE_META[run.role]?.label : "Assistant"} run
                 </Card.Title>
                 <p className="text-xs opacity-50">
                   {formatDateTime(run.startedAt)} · {run.model ?? "model unrecorded"} ·{" "}
@@ -170,9 +130,13 @@ function TeamView() {
               </Card.Header>
               <Card.Content className="space-y-3">
                 {run.errorMessage && (
-                  <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">
-                    {run.errorMessage}
-                  </div>
+                  <Alert status="danger">
+                    <Alert.Indicator />
+                    <Alert.Content>
+                      <Alert.Title>This stage failed</Alert.Title>
+                      <Alert.Description>{run.errorMessage}</Alert.Description>
+                    </Alert.Content>
+                  </Alert>
                 )}
                 {(run.transcript as TranscriptStep[]).length === 0 ? (
                   <p className="text-sm opacity-50">No transcript recorded.</p>

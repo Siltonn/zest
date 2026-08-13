@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Chip, Spinner } from "@heroui/react";
+import { Alert, Button, Chip, Spinner } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Post } from "@/lib/api";
 import {
@@ -74,9 +74,13 @@ export function PostDrawer({
             </p>
 
             {post.errorMessage && (
-              <div className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600">
-                {post.errorMessage}
-              </div>
+              <Alert status="danger" className="mt-3">
+                <Alert.Indicator />
+                <Alert.Content>
+                  <Alert.Title>Publishing failed</Alert.Title>
+                  <Alert.Description>{post.errorMessage}</Alert.Description>
+                </Alert.Content>
+              </Alert>
             )}
 
             {post.reasoning && (

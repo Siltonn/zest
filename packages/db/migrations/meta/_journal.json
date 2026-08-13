@@ -71,6 +71,13 @@
       "when": 1786619839201,
       "tag": "0009_clear_apocalypse",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786631264593,
+      "tag": "0010_jazzy_zaran",
+      "breakpoints": true
     }
   ]
 }

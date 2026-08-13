@@ -1,6 +1,14 @@
 "use client";
 
-import { Button, Card, Chip, Spinner, TextArea } from "@heroui/react";
+import {
+  Button,
+  Card,
+  Chip,
+  Disclosure,
+  Kbd,
+  Spinner,
+  TextArea,
+} from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ChangeEvent } from "react";
 import { api, type InboxItem } from "@/lib/api";
@@ -143,9 +151,16 @@ export default function InboxPage() {
           </p>
         </div>
         {items.length > 0 && (
-          <div className="text-xs opacity-40">
-            <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>a</kbd> approve · <kbd>e</kbd> edit ·{" "}
-            <kbd>r</kbd> reject
+          <div className="flex items-center gap-1.5 text-xs opacity-50">
+            <Kbd>j</Kbd>
+            <Kbd>k</Kbd>
+            <span>move</span>
+            <Kbd>a</Kbd>
+            <span>approve</span>
+            <Kbd>e</Kbd>
+            <span>edit</span>
+            <Kbd>r</Kbd>
+            <span>reject</span>
           </div>
         )}
       </header>
@@ -228,22 +243,29 @@ export default function InboxPage() {
                   )}
 
                   {item.reasoning && (
-                    <details className="text-sm">
-                      <summary className="cursor-pointer opacity-50 hover:opacity-80">
-                        {item.kind === "autonomy_request"
-                          ? "Why it thinks it has earned this"
-                          : "Why the agent proposed this"}
-                      </summary>
-                      <p className="mt-1.5 opacity-70">{item.reasoning}</p>
-                      {item.agentRunId && (
-                        <a
-                          href={`/team?run=${item.agentRunId}`}
-                          className="mt-1 inline-block text-xs underline opacity-50"
-                        >
-                          See the full run
-                        </a>
-                      )}
-                    </details>
+                    <Disclosure className="text-sm">
+                      <Disclosure.Heading>
+                        <Disclosure.Trigger className="opacity-60 hover:opacity-100">
+                          {item.kind === "autonomy_request"
+                            ? "Why it thinks it has earned this"
+                            : "Why the agent proposed this"}
+                          <Disclosure.Indicator />
+                        </Disclosure.Trigger>
+                      </Disclosure.Heading>
+                      <Disclosure.Content>
+                        <Disclosure.Body>
+                          <p className="opacity-70">{item.reasoning}</p>
+                          {item.agentRunId && (
+                            <Link
+                              href={`/team?run=${item.agentRunId}`}
+                              className="mt-1 inline-block text-xs underline opacity-50"
+                            >
+                              See the full run
+                            </Link>
+                          )}
+                        </Disclosure.Body>
+                      </Disclosure.Content>
+                    </Disclosure>
                   )}
 
                   {feedback !== null && isActive && (

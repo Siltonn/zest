@@ -1,6 +1,8 @@
 "use client";
 
-import { Card, Chip, Spinner } from "@heroui/react";
+import Link from "next/link";
+
+import { Card, Chip, Spinner, Table } from "@heroui/react";
 import { Segmented } from "@/components/segmented";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -72,18 +74,31 @@ export default function AuditPage() {
           {data.entries.length === 0 ? (
             <p className="py-10 text-center text-sm opacity-50">Nothing recorded yet.</p>
           ) : (
-            <ul className="divide-y divide-default-200/60">
-              {data.entries.map((entry) => {
-                const badge = actorBadge(entry.actor);
-                return (
-                  <li key={entry.id} className="flex items-start gap-3 px-4 py-2.5">
-                    <span
-                      className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-xs ${badge.color}`}
-                    >
-                      {badge.label}
-                    </span>
-                    <div className="min-w-0 flex-1 text-sm">
-                      <div>
+            <Table>
+              {/* Table root is a styled wrapper; Content is the real table, and
+                  the collection parts have to live inside it. */}
+              <Table.Content aria-label="Audit log">
+              <Table.Header>
+                <Table.Column isRowHeader>Actor</Table.Column>
+                <Table.Column>What happened</Table.Column>
+                <Table.Column>When</Table.Column>
+              </Table.Header>
+              <Table.Body>
+                {data.entries.map((entry) => {
+                  const badge = actorBadge(entry.actor);
+                  return (
+                    <Table.Row key={entry.id}>
+                      <Table.Cell>
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-xs ${badge.color}`}
+                        >
+                          {badge.label}
+                        </span>
+                        <div className="mt-0.5 text-xs opacity-45">
+                          {describeActor(entry.actor)}
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell>
                         <span className="capitalize">
                           {entry.action.replace(/_/g, " ")}
                         </span>{" "}
@@ -96,29 +111,29 @@ export default function AuditPage() {
                             → {entry.toStatus.replace(/_/g, " ")}
                           </span>
                         )}
-                      </div>
-                      <div className="text-xs opacity-40">
-                        by {describeActor(entry.actor)} · {formatDateTime(entry.createdAt)}
                         {entry.agentRunId && (
                           <>
                             {" · "}
-                            <a
+                            {/* Every agent action is one click from the
+                                transcript that produced it. */}
+                            <Link
                               href={`/team?run=${entry.agentRunId}`}
-                              className="underline"
+                              className="text-xs underline opacity-50"
                             >
                               run
-                            </a>
+                            </Link>
                           </>
                         )}
-                      </div>
-                    </div>
-                    <span className="shrink-0 text-xs opacity-30">
-                      {relativeTime(entry.createdAt)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+                      </Table.Cell>
+                      <Table.Cell className="whitespace-nowrap text-xs opacity-45">
+                        {formatDateTime(entry.createdAt)}
+                      </Table.Cell>
+                    </Table.Row>
+                  );
+                })}
+              </Table.Body>
+              </Table.Content>
+            </Table>
           )}
         </Card.Content>
       </Card>

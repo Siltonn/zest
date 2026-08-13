@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Card, Chip, EmptyState, Spinner, toast } from "@heroui/react";
+import { ConfirmButton } from "@/components/confirm-button";
 import { Field } from "@/components/field";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -118,13 +119,13 @@ export default function AccountsPage() {
                       {account.platform?.name ?? account.connectorId}
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="tertiary"
-                    onPress={() => disconnect.mutate(account.id)}
-                  >
-                    Disconnect
-                  </Button>
+                  <ConfirmButton
+                    label="Disconnect"
+                    title={`Disconnect @${account.handle}?`}
+                    body="Its voice card, scheduled posts and plan assignments go with it. Published posts stay on the platform."
+                    confirmLabel="Disconnect"
+                    onConfirm={() => disconnect.mutate(account.id)}
+                  />
                 </li>
               ))}
             </ul>

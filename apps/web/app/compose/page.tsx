@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, type ChangeEvent } from "react";
 import { api, type Account } from "@/lib/api";
 import { DateTimePicker } from "@/components/datetime-picker";
-import { Segmented } from "@/components/segmented";
+import { AccountSwitcher } from "@/components/account-switcher";
 
 /**
  * Writing by hand.
@@ -68,14 +68,9 @@ export default function ComposePage() {
       </header>
 
       {accounts.length > 0 && account && (
-        <Segmented
+        <AccountSwitcher
           value={account.id}
-          onChange={setAccountId}
-          options={accounts.map((a) => ({
-            id: a.id,
-            label: `${a.platform?.icon ?? ""} @${a.handle}`,
-          }))}
-          size="md"
+          onChange={(id) => id && setAccountId(id)}
         />
       )}
 

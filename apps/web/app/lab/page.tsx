@@ -1,10 +1,10 @@
 "use client";
 
-import { Button, Card, Chip, Spinner, TextArea, toast } from "@heroui/react";
+import { Alert, Button, Card, Chip, Spinner, TextArea, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ChangeEvent } from "react";
 import { api, type Account } from "@/lib/api";
-import { Segmented } from "@/components/segmented";
+import { AccountSwitcher } from "@/components/account-switcher";
 import { percent } from "@/lib/format";
 
 type VariantResult = {
@@ -126,10 +126,9 @@ export default function LabPage() {
         </Card.Header>
         <Card.Content className="space-y-3">
           {account && (
-            <Segmented
+            <AccountSwitcher
               value={account.id}
-              onChange={setAccountId}
-              options={accounts.map((a) => ({ id: a.id, label: `@${a.handle}` }))}
+              onChange={(id) => id && setAccountId(id)}
             />
           )}
 
@@ -171,9 +170,13 @@ export default function LabPage() {
           {test.data && (
             <div className="space-y-2 pt-2">
               {test.data.inconclusive && (
-                <div className="rounded-lg bg-amber-500/10 px-3 py-2 text-sm">
-                  {test.data.inconclusive}
-                </div>
+                <Alert status="warning">
+                  <Alert.Indicator />
+                  <Alert.Content>
+                    <Alert.Title>Too close to call</Alert.Title>
+                    <Alert.Description>{test.data.inconclusive}</Alert.Description>
+                  </Alert.Content>
+                </Alert>
               )}
               {test.data.variants.map((variant) => {
                 const won = test.data?.winner?.id === variant.id;
@@ -247,7 +250,9 @@ export default function LabPage() {
           {/* What the rules would do right now. A rule you cannot see the
               effect of before granting autonomy is a rule you cannot judge. */}
           {pending.length > 0 && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
+            <Alert status="warning">
+              <Alert.Indicator />
+              <Alert.Content>
               <div className="text-sm font-medium">
                 {pending.length} would fire right now
               </div>
@@ -263,7 +268,8 @@ export default function LabPage() {
                 They fire on the next engagement poll, once autonomy is granted for
                 engagement automations.
               </p>
-            </div>
+              </Alert.Content>
+            </Alert>
           )}
 
           {automations.map((item) => (

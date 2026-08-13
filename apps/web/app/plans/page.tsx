@@ -5,6 +5,7 @@ import {
   Card,
   Chip,
   Input,
+  Label,
   Spinner,
   TextArea,
   ToggleButton,
@@ -15,6 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState, type ChangeEvent } from "react";
 import { api, type Account } from "@/lib/api";
+import { ConfirmButton } from "@/components/confirm-button";
 import { Segmented } from "@/components/segmented";
 import { formatDateTime, relativeTime } from "@/lib/format";
 
@@ -184,7 +186,7 @@ function PlanForm({
       </Card.Header>
       <Card.Content className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">Name</label>
+          <Label className="mb-1 block text-sm font-medium">Name</Label>
           <Input
             value={name}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
@@ -193,10 +195,10 @@ function PlanForm({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">
+          <Label className="mb-1 block text-sm font-medium">
             What is it for{" "}
             <span className="font-normal opacity-50">— the strategist reads this</span>
-          </label>
+          </Label>
           <TextArea
             value={objective}
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
@@ -208,17 +210,17 @@ function PlanForm({
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">Cadence</label>
+          <Label className="mb-1.5 block text-sm font-medium">Cadence</Label>
           <Segmented value={schedule} onChange={setSchedule} options={CADENCES} />
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">
+          <Label className="mb-1.5 block text-sm font-medium">
             Accounts{" "}
             <span className="font-normal opacity-50">
               — pick more than one for a campaign that spans them
             </span>
-          </label>
+          </Label>
           <ToggleButtonGroup
             selectionMode="multiple"
             selectedKeys={selected}
@@ -365,14 +367,19 @@ function PlanCard({
         >
           {paused ? "Resume" : "Pause"}
         </Button>
-        <Button
-          size="sm"
-          variant="tertiary"
-          onPress={() => remove.mutate()}
+        <ConfirmButton
+          label="Delete"
+          title={`Delete "${plan.name}"?`}
+          body={
+            <>
+              Its schedule stops and its {plan.itemCounts.planned + plan.itemCounts.written}{" "}
+              planned and written items go with it. Posts already published stay up.
+            </>
+          }
+          confirmLabel="Delete the plan"
+          onConfirm={() => remove.mutate()}
           isPending={remove.isPending}
-        >
-          Delete
-        </Button>
+        />
       </Card.Footer>
 
       {isOpen && (

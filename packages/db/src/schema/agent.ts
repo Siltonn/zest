@@ -44,6 +44,15 @@ export const agentRuns = pgTable(
     planId: uuid(),
     accountId: uuid(),
     /**
+     * Ties the stages of one planning cycle together.
+     *
+     * Research fans out to a strategist per plan and a writer per account, all
+     * as separate jobs. Without a shared id they arrive as a flat list of runs
+     * and the shape of the cycle — the thing worth showing — is unreadable.
+     * The research run's own id is the cycle id.
+     */
+    cycleId: uuid(),
+    /**
      * The role's final text. Stages run as separate jobs now, so the next one
      * reads its input from here rather than being handed it in memory — which
      * is what makes a single stage retryable on its own.

@@ -66,6 +66,7 @@ export class AgentProcessor extends WorkerHost {
             workspaceId,
             planId: plan.id,
             briefing: result.briefing,
+            cycleId: result.runId,
           });
         }
         return { ...result, plans: targets.length };
@@ -78,6 +79,7 @@ export class AgentProcessor extends WorkerHost {
           workspaceId,
           planId: job.data.planId as string,
           briefing: (job.data.briefing as string) ?? "",
+          cycleId: job.data.cycleId as string | undefined,
           publisher: this.redis,
         });
         if (result.skipped) {
@@ -114,6 +116,7 @@ export class AgentProcessor extends WorkerHost {
             workspaceId,
             planId,
             accountId,
+            cycleId: job.data.cycleId,
           });
         }
         return { ...result, writers: accountIds.length };
@@ -126,6 +129,7 @@ export class AgentProcessor extends WorkerHost {
           workspaceId,
           planId: job.data.planId as string,
           accountId: job.data.accountId as string,
+          cycleId: job.data.cycleId as string | undefined,
           publisher: this.redis,
         });
         if (result.proposals > 0) {
