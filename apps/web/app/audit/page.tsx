@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, Chip, Spinner } from "@heroui/react";
+import { Segmented } from "@/components/segmented";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type AuditEntry } from "@/lib/api";
@@ -60,21 +61,11 @@ export default function AuditPage() {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {FILTERS.map((filter) => (
-          <button
-            key={filter.label}
-            onClick={() => setActorKind(filter.id)}
-            className={`rounded-lg px-3 py-1.5 text-sm ${
-              actorKind === filter.id
-                ? "bg-default-200/80 font-medium"
-                : "hover:bg-default-100"
-            }`}
-          >
-            {filter.label}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        value={actorKind ?? "all"}
+        onChange={(value) => setActorKind(value === "all" ? undefined : value)}
+        options={FILTERS.map((f) => ({ id: f.id ?? "all", label: f.label }))}
+      />
 
       <Card>
         <Card.Content className="p-0">

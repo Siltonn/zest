@@ -4,6 +4,7 @@ import { Button, Card, Chip, Spinner, TextArea } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ChangeEvent } from "react";
 import { api, type Account } from "@/lib/api";
+import { Segmented } from "@/components/segmented";
 import { percent } from "@/lib/format";
 
 type VariantResult = {
@@ -94,21 +95,13 @@ export default function LabPage() {
           </p>
         </Card.Header>
         <Card.Content className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            {accounts.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setAccountId(item.id)}
-                className={`rounded-lg px-3 py-1.5 text-sm ${
-                  account?.id === item.id
-                    ? "bg-default-200/80 font-medium"
-                    : "hover:bg-default-100"
-                }`}
-              >
-                @{item.handle}
-              </button>
-            ))}
-          </div>
+          {account && (
+            <Segmented
+              value={account.id}
+              onChange={setAccountId}
+              options={accounts.map((a) => ({ id: a.id, label: `@${a.handle}` }))}
+            />
+          )}
 
           {variants.map((text, index) => (
             <div key={index}>

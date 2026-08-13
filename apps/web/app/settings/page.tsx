@@ -1,6 +1,16 @@
 "use client";
 
-import { Button, Card, Chip, Spinner } from "@heroui/react";
+import {
+  Button,
+  Card,
+  Chip,
+  ListBox,
+  ListBoxItem,
+  Select,
+  Spinner,
+} from "@heroui/react";
+import { Field } from "@/components/field";
+import { Segmented } from "@/components/segmented";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type Workspace } from "@/lib/api";
@@ -95,20 +105,13 @@ export default function SettingsPage() {
             How often the agent researches and proposes a batch of content.
           </p>
         </Card.Header>
-        <Card.Content className="flex flex-wrap gap-2">
-          {SCHEDULES.map((option) => (
-            <button
-              key={option.id}
-              onClick={() => update.mutate({ planningSchedule: option.id })}
-              className={`rounded-lg px-3 py-1.5 text-sm ${
-                workspace?.planningSchedule === option.id
-                  ? "bg-default-200/80 font-medium"
-                  : "hover:bg-default-100"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
+        <Card.Content>
+          <Segmented
+            value={workspace?.planningSchedule ?? "daily"}
+            onChange={(planningSchedule) => update.mutate({ planningSchedule })}
+            options={SCHEDULES.map((o) => ({ id: o.id, label: o.label }))}
+            size="md"
+          />
         </Card.Content>
       </Card>
 
@@ -143,29 +146,38 @@ export default function SettingsPage() {
             </div>
           ))}
 
-          <div className="flex gap-2">
-            <select
-              value={target.kind}
-              onChange={(e) => setTarget((t) => ({ ...t, kind: e.target.value }))}
-              className="rounded-lg border border-default-200/60 bg-transparent px-2 py-2 text-sm"
-            >
-              <option value="slack">Slack</option>
-              <option value="discord">Discord</option>
-              <option value="email">Email</option>
-            </select>
-            <input
-              value={target.value}
-              onChange={(e) => setTarget((t) => ({ ...t, value: e.target.value }))}
-              placeholder={
-                target.kind === "email" ? "you@example.com" : "webhook URL"
+          <div className="flex flex-wrap items-end gap-2">
+            <Select
+              selectedKey={target.kind}
+              onSelectionChange={(key) =>
+                setTarget((t) => ({ ...t, kind: String(key) }))
               }
-              className="flex-1 rounded-lg border border-default-200/60 bg-transparent px-3 py-2 text-sm"
-            />
-            <Button
-              size="sm"
-              onPress={() => addTarget.mutate()}
-              isDisabled={!target.value}
+              className="w-36"
             >
+              <Select.Trigger>
+                <Select.Value />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBoxItem id="slack">Slack</ListBoxItem>
+                  <ListBoxItem id="discord">Discord</ListBoxItem>
+                  <ListBoxItem id="email">Email</ListBoxItem>
+                </ListBox>
+              </Select.Popover>
+            </Select>
+
+            <div className="min-w-48 flex-1">
+              <Field
+                value={target.value}
+                onChange={(value) => setTarget((t) => ({ ...t, value }))}
+                type={target.kind === "email" ? "email" : "url"}
+                placeholder={
+                  target.kind === "email" ? "you@example.com" : "https://hooks.slack.com/…"
+                }
+              />
+            </div>
+
+            <Button onPress={() => addTarget.mutate()} isDisabled={!target.value}>
               Add
             </Button>
           </div>

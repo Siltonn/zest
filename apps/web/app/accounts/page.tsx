@@ -1,6 +1,7 @@
 "use client";
 
-import { Button, Card, Chip, Spinner } from "@heroui/react";
+import { Button, Card, Chip, EmptyState, Spinner } from "@heroui/react";
+import { Field } from "@/components/field";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type Account } from "@/lib/api";
@@ -129,15 +130,15 @@ export default function AccountsPage() {
             {connecting === platform.id && (
               <Card.Content className="space-y-2">
                 {fieldsFor(platform.id).map((field) => (
-                  <input
+                  <Field
                     key={field.name}
-                    type={field.type}
+                    label={field.label}
+                    type={field.type as "text" | "password" | "url"}
                     placeholder={field.placeholder}
                     value={fields[field.name] ?? ""}
-                    onChange={(e) =>
-                      setFields((f) => ({ ...f, [field.name]: e.target.value }))
+                    onChange={(value) =>
+                      setFields((f) => ({ ...f, [field.name]: value }))
                     }
-                    className="w-full rounded-lg border border-default-200/60 bg-transparent px-3 py-2 text-sm"
                   />
                 ))}
                 <div className="flex gap-2">
@@ -173,23 +174,53 @@ export default function AccountsPage() {
 /** Mirrors each connector's declared auth fields. */
 function fieldsFor(
   connectorId: string,
-): { name: string; type: string; placeholder: string }[] {
+): { name: string; label: string; type: string; placeholder: string }[] {
   switch (connectorId) {
     case "pomelo":
       return [
-        { name: "handle", type: "text", placeholder: "handle, e.g. acme" },
-        { name: "displayName", type: "text", placeholder: "display name" },
+        { name: "handle", label: "Handle", type: "text", placeholder: "acme" },
+        {
+          name: "displayName",
+          label: "Display name",
+          type: "text",
+          placeholder: "Acme Inc.",
+        },
       ];
     case "bluesky":
       return [
-        { name: "handle", type: "text", placeholder: "you.bsky.social" },
-        { name: "appPassword", type: "password", placeholder: "app password" },
-        { name: "service", type: "url", placeholder: "https://bsky.social (optional)" },
+        {
+          name: "handle",
+          label: "Handle",
+          type: "text",
+          placeholder: "you.bsky.social",
+        },
+        {
+          name: "appPassword",
+          label: "App password",
+          type: "password",
+          placeholder: "xxxx-xxxx-xxxx-xxxx",
+        },
+        {
+          name: "service",
+          label: "PDS URL (optional)",
+          type: "url",
+          placeholder: "https://bsky.social",
+        },
       ];
     case "mastodon":
       return [
-        { name: "instance", type: "url", placeholder: "https://mastodon.social" },
-        { name: "accessToken", type: "password", placeholder: "access token" },
+        {
+          name: "instance",
+          label: "Instance URL",
+          type: "url",
+          placeholder: "https://mastodon.social",
+        },
+        {
+          name: "accessToken",
+          label: "Access token",
+          type: "password",
+          placeholder: "",
+        },
       ];
     default:
       return [];

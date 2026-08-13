@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type ChangeEvent } from "react";
 import { api, type Account } from "@/lib/api";
+import { Field } from "@/components/field";
+import { Segmented } from "@/components/segmented";
 
 /**
  * Writing by hand.
@@ -65,21 +67,17 @@ export default function ComposePage() {
         </p>
       </header>
 
-      <div className="flex flex-wrap gap-2">
-        {accounts.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setAccountId(item.id)}
-            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${
-              account?.id === item.id
-                ? "bg-default-200/80 font-medium"
-                : "hover:bg-default-100"
-            }`}
-          >
-            <span>{item.platform?.icon}</span>@{item.handle}
-          </button>
-        ))}
-      </div>
+      {accounts.length > 0 && account && (
+        <Segmented
+          value={account.id}
+          onChange={setAccountId}
+          options={accounts.map((a) => ({
+            id: a.id,
+            label: `${a.platform?.icon ?? ""} @${a.handle}`,
+          }))}
+          size="md"
+        />
+      )}
 
       <Card>
         <Card.Content className="space-y-3 pt-4">
@@ -156,11 +154,11 @@ export default function ComposePage() {
                   Add image
                 </Button>
               )}
-              <input
-              type="datetime-local"
-              value={when}
-              onChange={(e) => setWhen(e.target.value)}
-              className="rounded-lg border border-default-200/60 bg-transparent px-2 py-1 text-sm"
+              <Field
+                type="datetime-local"
+                value={when}
+                onChange={setWhen}
+                aria-label="When to publish"
               />
             </div>
           </div>

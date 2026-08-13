@@ -1,9 +1,10 @@
 "use client";
 
-import { Button, Card } from "@heroui/react";
+import { Button, Card, Form } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { Field } from "@/components/field";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -31,8 +32,8 @@ export default function SignUpPage() {
         throw new Error(body.message ?? "Could not create that account.");
       }
 
-      // A fresh account has no workspace yet; the backend creates one on first
-      // sign-in so the user lands somewhere usable rather than on an error.
+      // The backend creates a workspace on first authenticated request, so a
+      // new account lands somewhere usable rather than on an error.
       router.push("/");
       router.refresh();
     } catch (problem) {
@@ -43,48 +44,48 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-sm flex-col justify-center">
+    <div className="mx-auto flex min-h-[70vh] w-full max-w-sm flex-col justify-center">
       <div className="mb-6 text-center">
         <div className="text-3xl">🍋</div>
-        <h1 className="mt-2 text-xl font-semibold">Create a workspace</h1>
+        <h1 className="mt-2 text-xl font-semibold tracking-tight">
+          Create a workspace
+        </h1>
       </div>
 
       <Card>
-        <Card.Content className="pt-4">
-          <form onSubmit={submit} className="space-y-3">
-            <input
-              required
-              autoFocus
+        <Card.Content className="pt-5">
+          <Form onSubmit={submit} className="space-y-4">
+            <Field
+              label="Your name"
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="your name"
-              className="w-full rounded-lg border border-default-200/60 bg-transparent px-3 py-2 text-sm"
+              onChange={setName}
+              isRequired
+              autoFocus
             />
-            <input
+            <Field
+              label="Email"
               type="email"
-              required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={setEmail}
               placeholder="you@example.com"
-              className="w-full rounded-lg border border-default-200/60 bg-transparent px-3 py-2 text-sm"
+              isRequired
             />
-            <input
+            <Field
+              label="Password"
               type="password"
-              required
-              minLength={8}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="password (8 characters or more)"
-              className="w-full rounded-lg border border-default-200/60 bg-transparent px-3 py-2 text-sm"
+              onChange={setPassword}
+              description="At least 8 characters"
+              isRequired
             />
-            {error && <p className="text-sm text-red-500">{error}</p>}
+            {error && <p className="text-sm text-danger">{error}</p>}
             <Button type="submit" isPending={busy} className="w-full">
               Create account
             </Button>
-          </form>
+          </Form>
         </Card.Content>
         <Card.Footer className="justify-center text-sm opacity-60">
-          Already have one?{" "}
+          Already have one?
           <Link href="/sign-in" className="ml-1 underline">
             Sign in
           </Link>

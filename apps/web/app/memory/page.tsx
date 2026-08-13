@@ -4,6 +4,7 @@ import { Button, Card, Chip, Spinner, TextArea } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ChangeEvent } from "react";
 import { api, type Account, type MemoryDoc } from "@/lib/api";
+import { Segmented } from "@/components/segmented";
 import { describeActor, relativeTime } from "@/lib/format";
 
 type MemoryResponse = {
@@ -110,29 +111,15 @@ export default function MemoryPage() {
         </p>
       </header>
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setAccountId(null)}
-          className={`rounded-lg px-3 py-1.5 text-sm ${
-            accountId === null ? "bg-default-200/80 font-medium" : "hover:bg-default-100"
-          }`}
-        >
-          Workspace
-        </button>
-        {accounts.map((account) => (
-          <button
-            key={account.id}
-            onClick={() => setAccountId(account.id)}
-            className={`rounded-lg px-3 py-1.5 text-sm ${
-              accountId === account.id
-                ? "bg-default-200/80 font-medium"
-                : "hover:bg-default-100"
-            }`}
-          >
-            @{account.handle}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        value={accountId ?? "workspace"}
+        onChange={(value) => setAccountId(value === "workspace" ? null : value)}
+        options={[
+          { id: "workspace", label: "Workspace" },
+          ...accounts.map((a) => ({ id: a.id, label: `@${a.handle}` })),
+        ]}
+        size="md"
+      />
 
       {docs.map(({ kind, title, blurb, doc }) => (
         <Card key={kind}>
