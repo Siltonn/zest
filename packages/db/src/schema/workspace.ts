@@ -8,7 +8,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { Actor } from "@zest/shared";
-import { memoryKindEnum, memoryScopeEnum } from "./enums.js";
+import { memoryKindEnum, memoryScopeEnum } from "./enums.ts";
 
 export const workspaces = pgTable("workspaces", {
   id: uuid().primaryKey().defaultRandom(),

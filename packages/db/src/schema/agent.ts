@@ -18,9 +18,9 @@ import {
   digestModeEnum,
   metricEnum,
   notificationKindEnum,
-} from "./enums.js";
-import { linkedAccounts, posts } from "./publishing.js";
-import { workspaces } from "./workspace.js";
+} from "./enums.ts";
+import { linkedAccounts, posts } from "./publishing.ts";
+import { workspaces } from "./workspace.ts";
 
 /**
  * One row per agent invocation. The transcript is what makes a proposal

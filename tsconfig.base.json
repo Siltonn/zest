@@ -10,6 +10,12 @@
     "noImplicitOverride": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    // Source files import each other with explicit .ts extensions and tsc
+    // rewrites them to .js on emit. This lets Node run the TypeScript sources
+    // directly (node --test --experimental-strip-types) while still emitting
+    // correct ESM, so tests exercise source rather than a stale build.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
     "declarationMap": true,

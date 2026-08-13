@@ -12,8 +12,8 @@ import {
   inboundStatusEnum,
   postStatusEnum,
   sentimentEnum,
-} from "./enums.js";
-import { workspaces } from "./workspace.js";
+} from "./enums.ts";
+import { workspaces } from "./workspace.ts";
 
 export const linkedAccounts = pgTable(
   "linked_accounts",

@@ -9,7 +9,7 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
-import { simEventKindEnum } from "./enums.js";
+import { simEventKindEnum } from "./enums.ts";
 
 /**
  * Pomelo is a real (if small) social network that ships inside Zest: its own
