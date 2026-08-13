@@ -1,9 +1,9 @@
 "use client";
 
-import { Button, Card, ProgressBar, toast } from "@heroui/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button, Card, ProgressBar } from "@heroui/react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { api, type OnboardingState, type OnboardingStep } from "@/lib/api";
+import { api, type OnboardingState } from "@/lib/api";
 import { CheckIcon } from "@/components/icons";
 
 /**
@@ -16,25 +16,6 @@ import { CheckIcon } from "@/components/icons";
  * work is actually done — and comes back if the account is disconnected later.
  */
 export function GettingStarted() {
-  const queryClient = useQueryClient();
-
-  // The planning step has no page to send you to — the work is a run, not a
-  // form. Linking to the dashboard from the dashboard would be a dead click.
-  const plan = useMutation({
-    mutationFn: () => api.post("/agent/plan"),
-    onSuccess: () => {
-      toast.success("Planning run started", {
-        description: "Proposals will appear in your inbox when it finishes.",
-      });
-      setTimeout(() => {
-        void queryClient.invalidateQueries({ queryKey: ["onboarding"] });
-        void queryClient.invalidateQueries({ queryKey: ["inbox-count"] });
-      }, 4000);
-    },
-    onError: (error: Error) =>
-      toast.danger("Cannot run planning", { description: error.message }),
-  });
-
   const { data } = useQuery({
     queryKey: ["onboarding"],
     queryFn: () => api.get<OnboardingState>("/onboarding"),
@@ -107,34 +88,15 @@ export function GettingStarted() {
                 )}
               </div>
 
-              {isNext && <StepAction step={step} onRun={() => plan.mutate()} running={plan.isPending} />}
+              {isNext && (
+                <Link href={step.href} className="shrink-0">
+                  <Button size="sm">{step.cta}</Button>
+                </Link>
+              )}
             </div>
           );
         })}
       </Card.Content>
     </Card>
-  );
-}
-
-function StepAction({
-  step,
-  onRun,
-  running,
-}: {
-  step: OnboardingStep;
-  onRun: () => void;
-  running: boolean;
-}) {
-  if (step.id === "plan") {
-    return (
-      <Button size="sm" className="shrink-0" onPress={onRun} isPending={running}>
-        {step.cta}
-      </Button>
-    );
-  }
-  return (
-    <Link href={step.href} className="shrink-0">
-      <Button size="sm">{step.cta}</Button>
-    </Link>
   );
 }

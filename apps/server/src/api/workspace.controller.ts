@@ -35,7 +35,6 @@ import {
   QUEUE_SIMULATOR,
 } from "../queue/queue.constants.js";
 import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
-import { toCron } from "../worker/planning.scheduler.js";
 
 /** Workspace settings, accounts, memory, autonomy, analytics and audit. */
 @Controller("api/v1")
@@ -102,7 +101,6 @@ export class WorkspaceController {
       .object({
         name: z.string().optional(),
         timezone: z.string().optional(),
-        planningSchedule: z.string().optional(),
         kpiConfig: z.record(z.string(), z.unknown()).optional(),
       })
       .parse(body);
@@ -112,16 +110,6 @@ export class WorkspaceController {
       .set(input as never)
       .where(eq(schema.workspaces.id, req.workspaceId))
       .returning();
-
-    // Changing the cadence has to reach the queue, or the setting saves and
-    // nothing actually happens differently.
-    if (input.planningSchedule) {
-      await this.agentQueue.upsertJobScheduler(
-        `plan-${req.workspaceId}`,
-        { pattern: toCron(input.planningSchedule) ?? "0 7 * * *" },
-        { name: "planning", data: { workspaceId: req.workspaceId } },
-      );
-    }
 
     return updated;
   }
@@ -394,7 +382,9 @@ export class WorkspaceController {
   async plan(@Req() req: AuthedRequest) {
     // Queueing work the worker will silently skip is worse than saying no.
     this.requireModel();
-    const job = await this.agentQueue.add("planning", {
+    // Research once, then a strategist per active plan and a writer per
+    // account. Each stage is its own job, so one plan failing is one retry.
+    const job = await this.agentQueue.add("plan-research", {
       workspaceId: req.workspaceId,
     });
     return { queued: true, jobId: job.id };

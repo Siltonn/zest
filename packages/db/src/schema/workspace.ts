@@ -16,7 +16,6 @@ export const workspaces = pgTable("workspaces", {
   /** Display and planning zone. Storage is always UTC. */
   timezone: text().notNull().default("UTC"),
   /** `daily` | `weekdays` | `weekly` | a raw cron expression. */
-  planningSchedule: text().notNull().default("daily"),
   kpiConfig: jsonb().$type<{ goal?: string; targets?: Record<string, number> }>(),
   /** Demo mode speeds up the simulated clock so a day passes in seconds. */
   demoClockMultiplier: integer().notNull().default(1),

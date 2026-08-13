@@ -33,6 +33,9 @@ export async function startRun(
     role?: RoleName;
     model?: string;
     publisher?: EventPublisher;
+    /** Which programme this stage serves, and the account it writes for. */
+    planId?: string | null;
+    accountId?: string | null;
   },
 ): Promise<RunHandle> {
   const [run] = await db
@@ -43,6 +46,8 @@ export async function startRun(
       // `assistant` is a chat persona, not one of the pipeline roles the
       // schema enumerates, so it is recorded without a role.
       role: input.role && input.role !== "assistant" ? input.role : null,
+      planId: input.planId ?? null,
+      accountId: input.accountId ?? null,
       model: input.model ?? null,
       status: "running",
     })
@@ -74,6 +79,8 @@ export async function finishRun(
   handle: RunHandle,
   result: {
     transcript?: unknown[];
+    /** The role's final text — the next stage reads its input from here. */
+    output?: string;
     inputTokens?: number;
     outputTokens?: number;
     costUsd?: number;
@@ -85,6 +92,7 @@ export async function finishRun(
     .set({
       status: result.error ? "failed" : "succeeded",
       transcript: result.transcript ?? [],
+      output: result.output ?? null,
       inputTokens: result.inputTokens ?? 0,
       outputTokens: result.outputTokens ?? 0,
       costUsd: String(result.costUsd ?? 0),

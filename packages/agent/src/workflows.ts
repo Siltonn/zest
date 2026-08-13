@@ -1,5 +1,5 @@
-import { schema, eq, and, type Database } from "@zest/db";
-import { memory } from "@zest/core";
+import { schema, eq, and, inArray, type Database } from "@zest/db";
+import { memory, plans } from "@zest/core";
 import type { EventPublisher } from "@zest/core";
 import { agent as agentActor } from "@zest/shared";
 import { createRoleAgent, type RoleName } from "./agents.ts";
@@ -56,83 +56,222 @@ async function runRole(
   };
 }
 
-export type PlanningResult = {
+export type ResearchResult = {
   runId: string;
   briefing: string;
+  skipped?: string;
+};
+
+export type StrategyResult = {
+  runId: string;
   plan: string;
+  items: number;
+  skipped?: string;
+};
+
+export type CopyResult = {
+  runId: string;
   proposals: number;
   skipped?: string;
 };
 
 /**
- * The daily planning cycle. Three roles in sequence, each seeing the previous
- * one's output — research grounds the plan, the plan constrains the writing.
+ * Stage one: what is worth talking about.
+ *
+ * Deliberately workspace-wide and run once per cycle. Trends and performance
+ * are shared across accounts, so researching per account would spend N times
+ * the tokens on near-identical output — and worse, would stop the accounts
+ * coordinating, which is the whole reason a brand account and a founder account
+ * live in one workspace.
  */
-export async function runPlanning(options: RunOptions): Promise<PlanningResult> {
+export async function runResearch(options: RunOptions): Promise<ResearchResult> {
   const { db, workspaceId } = options;
 
   if (!hasModelAccess()) {
-    // The platform loop keeps working without a key; only the thinking stops.
-    return {
-      runId: "",
-      briefing: "",
-      plan: "",
-      proposals: 0,
-      skipped: new NoModelConfiguredError().message,
-    };
+    return { runId: "", briefing: "", skipped: new NoModelConfiguredError().message };
   }
 
   const handle = await startRun(db, {
     workspaceId,
     trigger: "cron_plan",
+    role: "researcher",
     publisher: options.publisher,
     model: options.model,
   });
 
-  const before = await countProposals(db, workspaceId);
-  const transcript: unknown[] = [];
-
   try {
     const context = await memory.buildContext(db, workspaceId);
-
     await reportProgress(handle, "researching", "Looking at trends and recent performance", "researcher");
+
     const research = await runRole(
       options,
       "researcher",
       `${context}\n\nResearch what this brand should post about this week.`,
       handle.id,
     );
-    transcript.push({ role: "researcher", ...research });
 
-    await reportProgress(handle, "planning", "Turning research into a weekly plan", "strategist");
-    const plan = await runRole(
-      options,
-      "strategist",
-      `${context}\n\n## Research briefing\n\n${research.text}\n\nBuild the plan for the coming week. Today is ${new Date().toISOString()}.`,
-      handle.id,
-    );
-    transcript.push({ role: "strategist", ...plan });
+    await finishRun(db, handle, {
+      transcript: research.transcript,
+      output: research.text,
+    });
+    return { runId: handle.id, briefing: research.text };
+  } catch (error) {
+    await finishRun(db, handle, { error: (error as Error).message });
+    throw error;
+  }
+}
 
-    await reportProgress(handle, "writing", "Drafting posts and sending them for review", "copywriter");
-    const copy = await runRole(
-      options,
-      "copywriter",
-      `${context}\n\n## This week's plan\n\n${plan.text}\n\nWrite and propose each post. Today is ${new Date().toISOString()}.`,
-      handle.id,
-    );
-    transcript.push({ role: "copywriter", ...copy });
+/**
+ * Stage two: what this programme will post, as rows.
+ *
+ * Runs once per plan, so a launch week and an always-on programme each get
+ * their own strategist pass over the same briefing. The output is plan items,
+ * not prose — which is what makes it reviewable before anything is written.
+ */
+export async function runStrategy(
+  options: RunOptions & { planId: string; briefing: string },
+): Promise<StrategyResult> {
+  const { db, workspaceId, planId } = options;
 
-    const after = await countProposals(db, workspaceId);
-    await finishRun(db, handle, { transcript });
+  if (!hasModelAccess()) {
+    return { runId: "", plan: "", items: 0, skipped: new NoModelConfiguredError().message };
+  }
 
+  const found = await plans.readPlan(db, workspaceId, planId);
+  if (!found) return { runId: "", plan: "", items: 0, skipped: "No such plan" };
+  if (found.accountIds.length === 0) {
+    return { runId: "", plan: "", items: 0, skipped: `"${found.plan.name}" has no accounts` };
+  }
+
+  const handle = await startRun(db, {
+    workspaceId,
+    trigger: "cron_plan",
+    role: "strategist",
+    planId,
+    publisher: options.publisher,
+    model: options.model,
+  });
+
+  try {
+    const context = await memory.buildContext(db, workspaceId);
+    await reportProgress(handle, "planning", `Planning "${found.plan.name}"`, "strategist");
+
+    const accounts = await db
+      .select({
+        id: schema.linkedAccounts.id,
+        handle: schema.linkedAccounts.handle,
+        connectorId: schema.linkedAccounts.connectorId,
+      })
+      .from(schema.linkedAccounts)
+      .where(inArray(schema.linkedAccounts.id, found.accountIds));
+
+    const window = [
+      found.plan.startsAt ? `starts ${found.plan.startsAt.toISOString()}` : null,
+      found.plan.endsAt ? `ends ${found.plan.endsAt.toISOString()}` : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    const brief = [
+      context,
+      `## Research briefing\n\n${options.briefing}`,
+      `## Programme: ${found.plan.name}`,
+      found.plan.objective ? `Objective: ${found.plan.objective}` : null,
+      `Cadence: ${found.plan.schedule}${window ? ` (${window})` : ""}`,
+      `Accounts this programme writes for:\n${accounts
+        .map((a) => `- ${a.id} — @${a.handle} on ${a.connectorId}`)
+        .join("\n")}`,
+      `Today is ${new Date().toISOString()}.`,
+      "Call add_plan_items once with the whole plan. Use only the account ids listed above.",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const before = found.items.length;
+    const result = await runRole(options, "strategist", brief, handle.id);
+    const after = await plans.readPlan(db, workspaceId, planId);
+
+    await finishRun(db, handle, {
+      transcript: result.transcript,
+      output: result.text,
+    });
     return {
       runId: handle.id,
-      briefing: research.text,
-      plan: plan.text,
-      proposals: after - before,
+      plan: result.text,
+      items: (after?.items.length ?? before) - before,
     };
   } catch (error) {
-    await finishRun(db, handle, { transcript, error: (error as Error).message });
+    await finishRun(db, handle, { error: (error as Error).message });
+    throw error;
+  }
+}
+
+/**
+ * Stage three: the writing, one account at a time.
+ *
+ * Scoped to a single account on purpose. The copywriter used to be handed every
+ * account in one context and asked to switch voice between items, which is how
+ * a founder account starts sounding like a press release. One run per voice
+ * costs a little more and keeps them apart.
+ */
+export async function runCopy(
+  options: RunOptions & { planId: string; accountId: string },
+): Promise<CopyResult> {
+  const { db, workspaceId, planId, accountId } = options;
+
+  if (!hasModelAccess()) {
+    return { runId: "", proposals: 0, skipped: new NoModelConfiguredError().message };
+  }
+
+  const items = await plans.pendingItems(db, planId, accountId);
+  if (items.length === 0) return { runId: "", proposals: 0, skipped: "Nothing left to write" };
+
+  const [account] = await db
+    .select()
+    .from(schema.linkedAccounts)
+    .where(eq(schema.linkedAccounts.id, accountId));
+  if (!account) return { runId: "", proposals: 0, skipped: "Unknown account" };
+
+  const handle = await startRun(db, {
+    workspaceId,
+    trigger: "cron_plan",
+    role: "copywriter",
+    planId,
+    accountId,
+    publisher: options.publisher,
+    model: options.model,
+  });
+
+  try {
+    const context = await memory.buildContext(db, workspaceId, accountId);
+    await reportProgress(handle, "writing", `Writing for @${account.handle}`, "copywriter");
+
+    const brief = [
+      context,
+      `You are writing for account ${account.id} (@${account.handle}) and no other.`,
+      `## Your assignments\n\n${items
+        .map(
+          (item) =>
+            `- planItemId ${item.id} — ${item.topic}${item.angle ? ` — angle: ${item.angle}` : ""}${
+              item.suggestedSlotAt ? ` — slot: ${item.suggestedSlotAt.toISOString()}` : ""
+            }`,
+        )
+        .join("\n")}`,
+      "Write and propose each one, passing its planItemId so the plan knows it is done.",
+      `Today is ${new Date().toISOString()}.`,
+    ].join("\n\n");
+
+    const before = await countProposals(db, workspaceId);
+    const result = await runRole(options, "copywriter", brief, handle.id);
+    const after = await countProposals(db, workspaceId);
+
+    await finishRun(db, handle, {
+      transcript: result.transcript,
+      output: result.text,
+    });
+    return { runId: handle.id, proposals: after - before };
+  } catch (error) {
+    await finishRun(db, handle, { error: (error as Error).message });
     throw error;
   }
 }

@@ -57,13 +57,16 @@ so there is nothing to memorise:
 3. **Give each account a voice.** Edit the starter card. A founder account and a
    company account should not sound alike, and the agent will not invent the
    difference for you.
-4. **Run the first plan.** The agent researches what is moving and proposes posts per
-   account. Nothing publishes — proposals land in `/inbox`.
+4. **Set up a plan and run it.** A plan carries its own cadence and names the accounts it
+   writes for — an always-on programme and a launch week spanning both accounts are the
+   same mechanism. Research happens once, a strategist plans each programme into concrete
+   items, and a writer takes one account at a time so the voices stay apart. Nothing
+   publishes — proposals land in `/inbox`.
 5. **Approve, edit, or send one back** with a note. Approving schedules it.
 6. **Fast-forward a day.** Scheduled posts publish, the simulated audience reacts, and
    their comments come back for triage.
 
-From there it runs on its own: planning on your chosen cadence, engagement polling
+From there it runs on its own: each plan on its own cadence, engagement polling
 every five minutes, a nightly analysis that proposes what it learned, and a weekly
 report on Monday morning. Everything it wants to change about itself — a strategy
 rewrite, a request to stop asking permission — arrives in the same inbox as the posts.
@@ -119,6 +122,8 @@ Design decisions and the arguments behind them are recorded in [`docs/adr/`](doc
   makes the scheduler trustworthy, and the two bugs found proving it
 - [003 — Graduated autonomy](docs/adr/003-graduated-autonomy.md): why approval is domain
   data rather than a paused agent
+- [004 — Plans and fan-out](docs/adr/004-plans-and-fan-out.md): why cadence belongs to a
+  plan rather than a workspace or an account, and what one-run-per-voice buys
 
 There is also an [eight-minute demo script](docs/demo.md).
 

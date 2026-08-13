@@ -60,7 +60,6 @@ async function main(): Promise<void> {
         .values({
           name: "Nimbus Tools",
           timezone: "America/New_York",
-          planningSchedule: "daily",
           kpiConfig: { goal: "Grow to 5,000 followers and hold engagement above 3%" },
           // Demo mode runs the simulated clock fast so a fast-forward is dramatic.
           demoClockMultiplier: 60,
@@ -200,6 +199,57 @@ post the same sentence, this one is wrong.`,
       });
     }
     console.info("  2 connected Pomelo accounts with distinct voice cards");
+  }
+
+  // ── Plans ─────────────────────────────────────────────────────────────
+  // Two programmes rather than one, because the interesting part of the model
+  // is that they differ: a steady always-on beat for the brand, and a faster
+  // founder cadence, both fed by the same research.
+  const [existingPlan] = await db
+    .select()
+    .from(schema.plans)
+    .where(eq(schema.plans.workspaceId, workspace.id))
+    .limit(1);
+
+  if (!existingPlan) {
+    const accounts = await db
+      .select()
+      .from(schema.linkedAccounts)
+      .where(eq(schema.linkedAccounts.workspaceId, workspace.id));
+    const brand = accounts.find((a) => a.handle === "nimbustools") ?? accounts[0]!;
+    const founder = accounts.find((a) => a.handle === "rae_builds") ?? accounts[0]!;
+
+    const [alwaysOn] = await db
+      .insert(schema.plans)
+      .values({
+        workspaceId: workspace.id,
+        name: "Always-on",
+        objective:
+          "Steady coverage of what we are building and what we are learning, without sounding like a changelog.",
+        schedule: "weekly",
+        status: "active",
+      })
+      .returning();
+
+    const [riffs] = await db
+      .insert(schema.plans)
+      .values({
+        workspaceId: workspace.id,
+        name: "Founder riffs",
+        objective:
+          "Rae's own voice: opinions, mistakes, and things learned the hard way. Never a product announcement.",
+        schedule: "weekdays",
+        status: "active",
+      })
+      .returning();
+
+    await db.insert(schema.planAccounts).values([
+      { planId: alwaysOn!.id, accountId: brand.id },
+      { planId: alwaysOn!.id, accountId: founder.id },
+      { planId: riffs!.id, accountId: founder.id },
+    ]);
+
+    console.info("  2 plans — a shared always-on beat and a founder-only cadence");
   }
 
   // ── Brand memory ──────────────────────────────────────────────────────

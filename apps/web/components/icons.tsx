@@ -175,3 +175,11 @@ export const SignOutIcon = (p: IconProps) => (
     <path d="M10 8.5 6.5 12l3.5 3.5M6.5 12H16" />
   </Icon>
 );
+
+export const PlansIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M4 5h10M4 10h7M4 15h12" />
+    <circle cx="18" cy="5" r="1.6" />
+    <circle cx="15" cy="10" r="1.6" />
+  </Icon>
+);

@@ -50,6 +50,20 @@
       "when": 1786611961572,
       "tag": "0006_tough_omega_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786618642740,
+      "tag": "0007_pretty_centennial",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786618863192,
+      "tag": "0008_furry_marvex",
+      "breakpoints": true
     }
   ]
 }

@@ -40,6 +40,15 @@ export const agentRuns = pgTable(
       .references(() => workspaces.id, { onDelete: "cascade" }),
     role: agentRoleEnum(),
     trigger: agentTriggerEnum().notNull(),
+    /** Which plan this stage served, and which account it wrote for. */
+    planId: uuid(),
+    accountId: uuid(),
+    /**
+     * The role's final text. Stages run as separate jobs now, so the next one
+     * reads its input from here rather than being handed it in memory — which
+     * is what makes a single stage retryable on its own.
+     */
+    output: text(),
     status: agentRunStatusEnum().notNull().default("running"),
     model: text(),
     inputTokens: integer().notNull().default(0),

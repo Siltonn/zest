@@ -14,6 +14,7 @@ import {
   AuditIcon,
   AutonomyIcon,
   CalendarIcon,
+  PlansIcon,
   ChatIcon,
   ComposeIcon,
   DashboardIcon,
@@ -45,6 +46,7 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/", label: "Dashboard", icon: DashboardIcon },
       { href: "/inbox", label: "Inbox", icon: InboxIcon, badge: true },
+      { href: "/plans", label: "Plans", icon: PlansIcon },
       { href: "/calendar", label: "Calendar", icon: CalendarIcon },
       { href: "/compose", label: "Compose", icon: ComposeIcon },
     ],

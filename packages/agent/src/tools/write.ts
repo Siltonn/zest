@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { eq, schema } from "@zest/db";
-import { autonomy, changeRequests, emit, memory, transition } from "@zest/core";
+import { autonomy, changeRequests, emit, memory, plans, transition } from "@zest/core";
 import { getConnector } from "@zest/connectors";
 import { z } from "zod";
 import { readToolContext, type ToolContext } from "../context.ts";
@@ -73,6 +73,10 @@ export const proposePost = createTool({
     reasoning: z
       .string()
       .describe("Why this post, for this account, at this time — one or two sentences"),
+    planItemId: z
+      .string()
+      .optional()
+      .describe("The plan item this post fulfils, when writing from a plan"),
   }),
   execute: async (input, { requestContext }) => {
     const toolContext = readToolContext(requestContext);
@@ -115,6 +119,12 @@ export const proposePost = createTool({
       })
       .returning();
     if (!created) return { ok: false, error: "Could not create the post" };
+
+    // Closing the loop back to the plan is what lets a post answer "why does
+    // this exist", and stops the copywriter writing the same item twice.
+    if (input.planItemId) {
+      await plans.markWritten(db, input.planItemId, created.id);
+    }
 
     if (decision.mode === "auto") {
       await transition(db, {
@@ -402,7 +412,86 @@ export const requestAutonomy = createTool({
   },
 });
 
+
+/**
+ * The strategist's output, as rows rather than prose.
+ *
+ * This is the seam between planning and writing. Making it a tool call instead
+ * of a paragraph the next role has to parse means the plan can be read, edited
+ * and retried on its own — and each item carries the account it belongs to, so
+ * the copywriter can be run once per voice instead of juggling all of them in
+ * one context.
+ */
+export const addPlanItems = createTool({
+  id: "add_plan_items",
+  description:
+    "Record the posts this plan should produce. One entry per post: which account, the topic, the angle for that account specifically, and when it should go out. Call this once with the whole plan.",
+  inputSchema: z.object({
+    items: z
+      .array(
+        z.object({
+          accountId: z.string(),
+          topic: z.string().describe("What the post is about, in a few words"),
+          angle: z
+            .string()
+            .describe(
+              "How this account in particular should treat it — what makes it not the other account's version",
+            ),
+          suggestedSlotAt: z
+            .string()
+            .describe("ISO 8601 timestamp for when it should go out"),
+        }),
+      )
+      .min(1),
+  }),
+  execute: async (input, { requestContext }) => {
+    const { db, workspaceId, planId, runId } = readToolContext(requestContext);
+    if (!planId) {
+      return { ok: false, error: "This run is not attached to a plan" };
+    }
+
+    // Accounts are checked against the plan's own targets: a strategist that
+    // wanders onto an account this programme does not cover would produce
+    // items the copywriter fan-out never picks up.
+    const targets = await db
+      .select({ accountId: schema.planAccounts.accountId })
+      .from(schema.planAccounts)
+      .where(eq(schema.planAccounts.planId, planId));
+    const allowed = new Set(targets.map((t) => t.accountId));
+
+    const rejected = input.items.filter((i) => !allowed.has(i.accountId));
+    const accepted = input.items.filter((i) => allowed.has(i.accountId));
+    if (accepted.length === 0) {
+      return {
+        ok: false,
+        error: `None of those accounts are on this plan. It covers: ${[...allowed].join(", ")}`,
+      };
+    }
+
+    const created = await plans.addItems(db, {
+      planId,
+      workspaceId,
+      agentRunId: runId,
+      items: accepted.map((item) => ({
+        accountId: item.accountId,
+        topic: item.topic,
+        angle: item.angle,
+        suggestedSlotAt: new Date(item.suggestedSlotAt),
+      })),
+    });
+
+    return {
+      ok: true,
+      added: created.length,
+      ...(rejected.length > 0
+        ? { skipped: `${rejected.length} item(s) named an account not on this plan` }
+        : {}),
+    };
+  },
+});
+
 export const WRITE_TOOLS = {
+  add_plan_items: addPlanItems,
   draft_post: draftPost,
   propose_post: proposePost,
   schedule_post: schedulePost,

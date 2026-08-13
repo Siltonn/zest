@@ -7,12 +7,15 @@ import { DATABASE } from "../infra/database.module.js";
 import { QUEUE_AGENT_RUN } from "../queue/queue.constants.js";
 
 /**
- * Turns each workspace's chosen planning cadence into a real repeatable job.
+ * Turns each plan's cadence into a real repeatable job.
  *
- * Without this the setting on the settings page is decorative — it saves, and
- * nothing changes. Each workspace gets its own scheduler keyed by id, so
- * changing the cadence replaces that workspace's schedule and leaves the others
- * alone.
+ * The cadence used to live on the workspace, which meant every account moved at
+ * the same speed. It now lives on the plan, so a founder programme can fire
+ * daily beside a brand programme firing weekly — and a launch week can run
+ * hourly for seven days and then stop, because a plan carries its own window.
+ *
+ * Keyed by plan id: changing one programme's cadence replaces its schedule and
+ * leaves the others alone.
  */
 @Injectable()
 export class PlanningScheduler implements OnModuleInit {
@@ -27,26 +30,56 @@ export class PlanningScheduler implements OnModuleInit {
     await this.syncAll();
   }
 
-  /** Called on boot, and again whenever a workspace changes its cadence. */
+  /** Called on boot, and again whenever a plan's cadence or status changes. */
   async syncAll(): Promise<void> {
-    const workspaces = await this.db
+    const rows = await this.db
       .select({
-        id: schema.workspaces.id,
-        planningSchedule: schema.workspaces.planningSchedule,
+        id: schema.plans.id,
+        workspaceId: schema.plans.workspaceId,
+        schedule: schema.plans.schedule,
+        status: schema.plans.status,
       })
-      .from(schema.workspaces);
+      .from(schema.plans);
 
-    for (const workspace of workspaces) {
-      await this.sync(workspace.id, workspace.planningSchedule);
+    for (const plan of rows) {
+      await this.sync(plan.id, plan.workspaceId, plan.schedule, plan.status);
+    }
+
+    await this.pruneOrphans(new Set(rows.map((p) => p.id)));
+  }
+
+  /**
+   * Drop timers with nothing behind them.
+   *
+   * Two ways they appear: a plan deleted while this process was down, and the
+   * upgrade from workspace-level cadence, which left a `plan-<workspaceId>`
+   * scheduler that would happily keep firing alongside the new per-plan ones —
+   * planning twice a day for anyone who upgraded rather than installed fresh.
+   */
+  private async pruneOrphans(live: Set<string>): Promise<void> {
+    const scheduled = await this.queue.getJobSchedulers(0, -1);
+    for (const entry of scheduled) {
+      const key = entry?.key;
+      if (!key?.startsWith("plan-")) continue;
+      const id = key.slice("plan-".length);
+      if (live.has(id)) continue;
+
+      await this.queue.removeJobScheduler(key).catch(() => undefined);
+      this.logger.log(`removed stale schedule ${key}`);
     }
   }
 
-  async sync(workspaceId: string, schedule: string): Promise<void> {
-    const pattern = toCron(schedule);
-    const key = `plan-${workspaceId}`;
+  async sync(
+    planId: string,
+    workspaceId: string,
+    schedule: string,
+    status: string,
+  ): Promise<void> {
+    const pattern = status === "active" ? toCron(schedule) : null;
+    const key = `plan-${planId}`;
 
     if (!pattern) {
-      // "manual" means the operator drives it from the dashboard.
+      // Paused, archived, or "manual" — the operator drives it by hand.
       await this.queue.removeJobScheduler(key).catch(() => undefined);
       return;
     }
@@ -54,13 +87,13 @@ export class PlanningScheduler implements OnModuleInit {
     await this.queue.upsertJobScheduler(
       key,
       { pattern },
-      { name: "planning", data: { workspaceId } },
+      { name: "plan-research", data: { workspaceId, planId } },
     );
-    this.logger.log(`planning for ${workspaceId}: ${schedule} (${pattern})`);
+    this.logger.log(`plan ${planId}: ${schedule} (${pattern})`);
   }
 
-  async remove(workspaceId: string): Promise<void> {
-    await this.queue.removeJobScheduler(`plan-${workspaceId}`).catch(() => undefined);
+  async remove(planId: string): Promise<void> {
+    await this.queue.removeJobScheduler(`plan-${planId}`).catch(() => undefined);
   }
 }
 

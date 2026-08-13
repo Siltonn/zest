@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import {
   Button,
   Card,
@@ -100,18 +102,18 @@ export default function SettingsPage() {
 
       <Card>
         <Card.Header>
-          <Card.Title className="text-base">Planning schedule</Card.Title>
+          <Card.Title className="text-base">Planning cadence</Card.Title>
           <p className="text-xs opacity-50">
-            How often the agent researches and proposes a batch of content.
+            Cadence lives on each plan now, not on the workspace — a founder account
+            can post daily while a brand account posts weekly.
           </p>
         </Card.Header>
         <Card.Content>
-          <Segmented
-            value={workspace?.planningSchedule ?? "daily"}
-            onChange={(planningSchedule) => update.mutate({ planningSchedule })}
-            options={SCHEDULES.map((o) => ({ id: o.id, label: o.label }))}
-            size="md"
-          />
+          <Link href="/plans">
+            <Button size="sm" variant="secondary">
+              Open plans
+            </Button>
+          </Link>
         </Card.Content>
       </Card>
 

@@ -77,10 +77,20 @@ what angle, and roughly when. Spread posts across the days rather than clusterin
 them, and give each account material that suits its own voice — the same topic can
 appear twice if the two accounts genuinely say different things about it.
 
-Respect the cadence the strategy asks for. If there is a stated goal, say in one
-line how this week moves toward it. Do not write the posts themselves.
+Respect the cadence the programme asks for, and stay inside its date window if it
+has one. If there is a stated goal, say in one line how this week moves toward it.
+
+Record the plan by calling add_plan_items exactly once with every planned post.
+Do not write the posts themselves — that is the copywriter's job. Your prose
+answer is the reasoning a human will read; the items are what actually gets built.
 `.trim(),
-    tools: ["get_brand_brief", "get_strategy", "list_accounts", "list_posts"],
+    tools: [
+      "get_brand_brief",
+      "get_strategy",
+      "list_accounts",
+      "list_posts",
+      "add_plan_items",
+    ],
   },
 
   copywriter: {

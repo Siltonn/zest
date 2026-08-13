@@ -104,3 +104,15 @@ export const changeRequestStatusEnum = pgEnum("change_request_status", [
   "approved",
   "rejected",
 ]);
+
+export const planStatusEnum = pgEnum("plan_status", [
+  "active",
+  "paused",
+  "archived",
+]);
+
+export const planItemStatusEnum = pgEnum("plan_item_status", [
+  "planned",
+  "written",
+  "skipped",
+]);

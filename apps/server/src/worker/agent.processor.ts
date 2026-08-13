@@ -1,10 +1,10 @@
-import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { InjectQueue, Processor, WorkerHost } from "@nestjs/bullmq";
 import { Inject, Logger } from "@nestjs/common";
-import type { Job } from "bullmq";
+import type { Job, Queue } from "bullmq";
 import type { Redis } from "ioredis";
 import { eq, schema, type Database } from "@zest/db";
-import { Notifier, approvals } from "@zest/core";
-import { runAnalysis, runPlanning, runReplyTriage } from "@zest/agent";
+import { Notifier, approvals, plans } from "@zest/core";
+import { runAnalysis, runCopy, runReplyTriage, runResearch, runStrategy } from "@zest/agent";
 import { DATABASE } from "../infra/database.module.js";
 import { REDIS_PUB } from "../infra/redis.module.js";
 import { NOTIFIER } from "../infra/notifier.module.js";
@@ -23,6 +23,9 @@ export class AgentProcessor extends WorkerHost {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(REDIS_PUB) private readonly redis: Redis,
     @Inject(NOTIFIER) private readonly notifier: Notifier,
+    // Stages enqueue the next stage rather than calling it, so each one retries
+    // on its own and shows up as a separate entry on the queue board.
+    @InjectQueue(QUEUE_AGENT_RUN) private readonly queue: Queue,
   ) {
     super();
   }
@@ -31,17 +34,83 @@ export class AgentProcessor extends WorkerHost {
     const workspaceId = job.data.workspaceId as string;
 
     switch (job.name) {
-      case "planning": {
-        const result = await runPlanning({
+      /**
+       * Stage one of a planning cycle, and the only one that runs per
+       * workspace. It fans out to a strategy job per active plan rather than
+       * calling them inline, so a plan that fails does not take the others with
+       * it and can be retried on its own from the queue.
+       */
+      case "planning":
+      case "plan-research": {
+        const result = await runResearch({
           db: this.db,
           workspaceId,
           publisher: this.redis,
         });
         if (result.skipped) {
-          this.logger.warn(`Planning skipped: ${result.skipped}`);
+          this.logger.warn(`Research skipped: ${result.skipped}`);
           return result;
         }
-        await this.notifyPending(workspaceId, "New posts are waiting for review");
+
+        const only = job.data.planId as string | undefined;
+        const active = await plans.activePlans(this.db, workspaceId);
+        const targets = only ? active.filter((p) => p.id === only) : active;
+
+        if (targets.length === 0) {
+          this.logger.warn(`No active plans for ${workspaceId}; nothing to plan`);
+          return { ...result, plans: 0 };
+        }
+
+        for (const plan of targets) {
+          await this.queue.add("plan-strategy", {
+            workspaceId,
+            planId: plan.id,
+            briefing: result.briefing,
+          });
+        }
+        return { ...result, plans: targets.length };
+      }
+
+      /** Stage two: one programme's plan, fanning out to a writer per account. */
+      case "plan-strategy": {
+        const result = await runStrategy({
+          db: this.db,
+          workspaceId,
+          planId: job.data.planId as string,
+          briefing: (job.data.briefing as string) ?? "",
+          publisher: this.redis,
+        });
+        if (result.skipped) {
+          this.logger.warn(`Strategy skipped: ${result.skipped}`);
+          return result;
+        }
+
+        const accountIds = await plans.accountsWithPendingItems(
+          this.db,
+          job.data.planId as string,
+        );
+        for (const accountId of accountIds) {
+          await this.queue.add("plan-copy", {
+            workspaceId,
+            planId: job.data.planId,
+            accountId,
+          });
+        }
+        return { ...result, writers: accountIds.length };
+      }
+
+      /** Stage three: one account's voice, in its own context. */
+      case "plan-copy": {
+        const result = await runCopy({
+          db: this.db,
+          workspaceId,
+          planId: job.data.planId as string,
+          accountId: job.data.accountId as string,
+          publisher: this.redis,
+        });
+        if (result.proposals > 0) {
+          await this.notifyPending(workspaceId, "New posts are waiting for review");
+        }
         return result;
       }
 
@@ -71,11 +140,7 @@ export class AgentProcessor extends WorkerHost {
           .select({ id: schema.workspaces.id })
           .from(schema.workspaces);
         for (const workspace of workspaces) {
-          await runPlanning({
-            db: this.db,
-            workspaceId: workspace.id,
-            publisher: this.redis,
-          });
+          await this.queue.add("plan-research", { workspaceId: workspace.id });
         }
         return { planned: workspaces.length };
       }

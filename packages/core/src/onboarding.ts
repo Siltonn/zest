@@ -119,11 +119,11 @@ export async function readOnboarding(
     },
     {
       id: "plan",
-      title: "Run the first plan",
+      title: "Set up a plan and run it",
       description:
-        "The agent researches what is moving, then proposes posts per account. Nothing publishes — proposals land in your inbox.",
-      href: "/dashboard",
-      cta: "Run planning",
+        "A plan carries its own cadence and names the accounts it writes for. Research is shared, then a strategist plans each programme and a writer works one voice at a time.",
+      href: "/plans",
+      cta: "Open plans",
       done: (runs?.n ?? 0) > 0,
     },
     {

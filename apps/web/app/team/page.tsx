@@ -4,7 +4,7 @@ import { Card, Chip, Spinner } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { api, type AgentRun } from "@/lib/api";
+import { api, type Account, type AgentRun } from "@/lib/api";
 import { formatDateTime, relativeTime } from "@/lib/format";
 
 const ROLES: Record<string, { label: string; blurb: string; icon: string }> = {
@@ -63,6 +63,11 @@ function TeamView() {
     refetchInterval: 15_000,
   });
 
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: () => api.get<Account[]>("/accounts"),
+  });
+
   const { data: run } = useQuery({
     queryKey: ["run", selected],
     queryFn: () => api.get<AgentRun>(`/runs/${selected}`),
@@ -82,8 +87,9 @@ function TeamView() {
       <header>
         <h1 className="text-2xl font-semibold">Team</h1>
         <p className="text-sm opacity-60">
-          Five roles, run in sequence by the planning workflow. Not a chat between
-          agents — each stage hands the next a concrete artifact.
+          Five roles, run as separate jobs. Not a chat between agents — research
+          happens once for the workspace, a strategist plans each programme, and a
+          writer takes one account at a time so the voices stay apart.
         </p>
       </header>
 
@@ -124,6 +130,11 @@ function TeamView() {
                 <span className="font-medium">
                   {item.role ? ROLES[item.role]?.label : "Assistant"}
                 </span>
+                {item.accountId && (
+                  <span className="text-xs opacity-50">
+                    @{accounts.find((a) => a.id === item.accountId)?.handle ?? "?"}
+                  </span>
+                )}
                 <Chip
                   size="sm"
                   variant="soft"

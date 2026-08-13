@@ -15,6 +15,10 @@ export type ToolContext = {
   actor: Actor;
   runId: string;
   publisher?: EventPublisher;
+  /** Set on plan stages, so a tool writes into the programme that invoked it. */
+  planId?: string;
+  /** Set on the copywriter stage, which is scoped to one account. */
+  accountId?: string;
 };
 
 const KEY = "zest";

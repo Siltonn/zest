@@ -3,7 +3,7 @@ import { AgentProcessor } from "./agent.processor.js";
 import { IngestProcessor } from "./ingest.processor.js";
 import { PublishProcessor } from "./publish.processor.js";
 import { SimulatorProcessor } from "./simulator.processor.js";
-import { PlanningScheduler } from "./planning.scheduler.js";
+import { PlanScheduleModule } from "./plan-schedule.module.js";
 import { SchedulerService } from "./scheduler.service.js";
 
 /**
@@ -11,14 +11,13 @@ import { SchedulerService } from "./scheduler.service.js";
  * API-only container never starts consuming jobs.
  */
 @Module({
+  imports: [PlanScheduleModule],
   providers: [
     SchedulerService,
-    PlanningScheduler,
     PublishProcessor,
     AgentProcessor,
     IngestProcessor,
     SimulatorProcessor,
   ],
-  exports: [PlanningScheduler],
 })
 export class WorkerModule {}

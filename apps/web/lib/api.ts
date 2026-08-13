@@ -192,6 +192,10 @@ export type TrustStat = {
 export type AgentRun = {
   id: string;
   role: string | null;
+  /** Which programme this stage served, and the account it wrote for. */
+  planId: string | null;
+  accountId: string | null;
+  output: string | null;
   trigger: string;
   status: string;
   model: string | null;
@@ -223,7 +227,6 @@ export type Workspace = {
   id: string;
   name: string;
   timezone: string;
-  planningSchedule: string;
   kpiConfig: { goal?: string } | null;
   simNow: string;
 };
