@@ -13,6 +13,9 @@ const config: NextConfig = {
       { source: "/api/v1/:path*", destination: `${serverUrl}/api/v1/:path*` },
       { source: "/api/auth/:path*", destination: `${serverUrl}/api/auth/:path*` },
       { source: "/events", destination: `${serverUrl}/events` },
+      // Pomelo's API is proxied under /api/pomelo because /pomelo itself is a
+      // page in this app — the network's own feed.
+      { source: "/api/pomelo/:path*", destination: `${serverUrl}/pomelo/:path*` },
     ];
   },
 };
