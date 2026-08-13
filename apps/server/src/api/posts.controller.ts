@@ -14,7 +14,7 @@ import {
 import { InjectQueue } from "@nestjs/bullmq";
 import type { Queue } from "bullmq";
 import { and, desc, eq, schema, type Database } from "@zest/db";
-import { approvals, audit, transition } from "@zest/core";
+import { approvals, audit, changeRequests, transition } from "@zest/core";
 import { getConnector, listConnectorMeta } from "@zest/connectors";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
@@ -270,5 +270,167 @@ export class PostsController {
   async rejectReply(@Req() req: AuthedRequest, @Param("id") id: string) {
     await approvals.rejectReplyDraft(this.db, id, req.actor);
     return { ok: true };
+  }
+
+  /**
+   * Comments and mentions the agent has not answered yet.
+   *
+   * Without this they were a black hole: an inbound row only became visible
+   * once triage had drafted a reply, so anything the agent skipped — or
+   * everything, with no model configured — was silently lost. Audience replies
+   * are the one thing an operator must never miss.
+   */
+  @Get("inbound")
+  async inbound(@Req() req: AuthedRequest, @Query("status") status = "new") {
+    const rows = await this.db
+      .select({ item: schema.inboundItems, account: schema.linkedAccounts })
+      .from(schema.inboundItems)
+      .innerJoin(
+        schema.linkedAccounts,
+        eq(schema.inboundItems.accountId, schema.linkedAccounts.id),
+      )
+      .where(
+        and(
+          eq(schema.linkedAccounts.workspaceId, req.workspaceId),
+          eq(schema.inboundItems.status, status as never),
+        ),
+      )
+      .orderBy(desc(schema.inboundItems.receivedAt))
+      .limit(100);
+
+    return rows.map(({ item, account }) => ({
+      ...item,
+      account: {
+        id: account.id,
+        handle: account.handle,
+        connectorId: account.connectorId,
+      },
+    }));
+  }
+
+  /**
+   * Answer a comment yourself. The agent is the usual author, but the loop must
+   * close without a model configured — otherwise a demo with no API key can
+   * receive replies and never send one.
+   */
+  @HttpPost("inbound/:id/reply")
+  async replyManually(
+    @Req() req: AuthedRequest,
+    @Param("id") id: string,
+    @Body() body: { text?: string },
+  ) {
+    const text = body?.text?.trim();
+    if (!text) throw new BadRequestException("A reply needs some text");
+
+    const [row] = await this.db
+      .select({ item: schema.inboundItems, account: schema.linkedAccounts })
+      .from(schema.inboundItems)
+      .innerJoin(
+        schema.linkedAccounts,
+        eq(schema.inboundItems.accountId, schema.linkedAccounts.id),
+      )
+      .where(
+        and(
+          eq(schema.inboundItems.id, id),
+          eq(schema.linkedAccounts.workspaceId, req.workspaceId),
+        ),
+      );
+    if (!row) throw new NotFoundException("No such comment");
+
+    const issues = getConnector(row.account.connectorId)
+      .validate({ text, media: [] })
+      .filter((i) => i.severity === "error");
+    if (issues.length > 0) {
+      throw new BadRequestException(issues.map((i) => i.message).join("; "));
+    }
+
+    // Written straight to approved: a human typed it, so there is nobody left
+    // to review it. It still goes through the same send path and audit trail.
+    const [draft] = await this.db
+      .insert(schema.replyDrafts)
+      .values({
+        workspaceId: req.workspaceId,
+        inboundItemId: id,
+        status: "approved",
+        content: { text, media: [] },
+        reasoning: "Written by the operator",
+        createdByActor: req.actor,
+      })
+      .returning();
+    if (!draft) throw new BadRequestException("Could not save the reply");
+
+    await this.db
+      .update(schema.inboundItems)
+      .set({ status: "replied" })
+      .where(eq(schema.inboundItems.id, id));
+
+    await this.db.insert(schema.auditLogs).values({
+      workspaceId: req.workspaceId,
+      entityType: "reply_draft",
+      entityId: draft.id,
+      action: "reply_manually",
+      toStatus: "approved",
+      actor: req.actor,
+    });
+
+    await enqueueUnique(
+      this.publishQueue,
+      "send-reply",
+      { replyDraftId: draft.id },
+      `reply-${draft.id}`,
+    );
+    return { ok: true, draftId: draft.id };
+  }
+
+  @HttpPost("inbound/:id/ignore")
+  async ignoreInbound(@Req() req: AuthedRequest, @Param("id") id: string) {
+    await this.db
+      .update(schema.inboundItems)
+      .set({ status: "ignored" })
+      .where(eq(schema.inboundItems.id, id));
+
+    await this.db.insert(schema.auditLogs).values({
+      workspaceId: req.workspaceId,
+      entityType: "inbound_item",
+      entityId: id,
+      action: "ignore",
+      toStatus: "ignored",
+      actor: req.actor,
+    });
+    return { ok: true };
+  }
+
+  /**
+   * Deciding on a change the agent wants to make to itself. Approving is not
+   * bookkeeping — it writes the memory document the next run reads, or grants
+   * the rule that changes what every tool may do without asking.
+   */
+  @HttpPost("changes/:id/approve")
+  async approveChange(@Req() req: AuthedRequest, @Param("id") id: string) {
+    try {
+      return await changeRequests.approve(this.db, req.workspaceId, id, req.actor);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
+  }
+
+  @HttpPost("changes/:id/reject")
+  async rejectChange(
+    @Req() req: AuthedRequest,
+    @Param("id") id: string,
+    @Body() body: { reason?: string },
+  ) {
+    try {
+      await changeRequests.reject(
+        this.db,
+        req.workspaceId,
+        id,
+        req.actor,
+        body?.reason,
+      );
+      return { ok: true };
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
   }
 }

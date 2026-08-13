@@ -80,6 +80,49 @@ export class AgentProcessor extends WorkerHost {
         return { planned: workspaces.length };
       }
 
+      /**
+       * Nightly and weekly fan-out. Analysis proposes memory updates, so a
+       * quiet night still ends with something in the inbox to look at in the
+       * morning — which is the difference between an assistant and a tool.
+       */
+      case "analyze-all":
+      case "report-all": {
+        const weekly = job.name === "report-all";
+        const workspaces = await this.db
+          .select({ id: schema.workspaces.id })
+          .from(schema.workspaces);
+        for (const workspace of workspaces) {
+          try {
+            await runAnalysis({
+              db: this.db,
+              workspaceId: workspace.id,
+              publisher: this.redis,
+              weekly,
+            });
+            if (weekly) {
+              await this.notifier.dispatch(this.db, {
+                workspaceId: workspace.id,
+                title: "Your weekly report is ready",
+                body: "Last week's numbers, what the agent learned, and its plan for this week.",
+                url: "/dashboard",
+                kind: "report",
+              });
+            } else {
+              await this.notifyPending(
+                workspace.id,
+                "The agent has something to propose",
+              );
+            }
+          } catch (error) {
+            // One workspace without a model configured must not stop the rest.
+            this.logger.warn(
+              `${job.name} failed for ${workspace.id}: ${(error as Error).message}`,
+            );
+          }
+        }
+        return { analyzed: workspaces.length, weekly };
+      }
+
       default:
         this.logger.warn(`Unknown agent job ${job.name}`);
         return null;

@@ -2,6 +2,7 @@ import { InjectQueue } from "@nestjs/bullmq";
 import { Injectable, Logger, type OnModuleInit } from "@nestjs/common";
 import type { Queue } from "bullmq";
 import {
+  QUEUE_AGENT_RUN,
   QUEUE_INGEST,
   QUEUE_PUBLISH,
   QUEUE_SIMULATOR,
@@ -21,6 +22,7 @@ export class SchedulerService implements OnModuleInit {
     @InjectQueue(QUEUE_PUBLISH) private readonly publishQueue: Queue,
     @InjectQueue(QUEUE_SIMULATOR) private readonly simulatorQueue: Queue,
     @InjectQueue(QUEUE_INGEST) private readonly ingestQueue: Queue,
+    @InjectQueue(QUEUE_AGENT_RUN) private readonly agentQueue: Queue,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -28,6 +30,7 @@ export class SchedulerService implements OnModuleInit {
       [QUEUE_PUBLISH]: this.publishQueue,
       [QUEUE_SIMULATOR]: this.simulatorQueue,
       [QUEUE_INGEST]: this.ingestQueue,
+      [QUEUE_AGENT_RUN]: this.agentQueue,
     };
 
     for (const job of Object.values(REPEATABLE_JOBS)) {

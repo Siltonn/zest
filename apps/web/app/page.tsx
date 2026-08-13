@@ -21,6 +21,7 @@ import {
   type Post,
   type Workspace,
 } from "@/lib/api";
+import { GettingStarted } from "@/components/getting-started";
 import { Segmented } from "@/components/segmented";
 import { Sparkline } from "@/components/sparkline";
 import {
@@ -157,6 +158,8 @@ export default function DashboardPage() {
           </Card.Content>
         </Card>
       )}
+
+      <GettingStarted />
 
       {(inbox?.count ?? 0) > 0 && (
         <Card className="border-l-4 border-l-warning">

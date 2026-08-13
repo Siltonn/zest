@@ -12,6 +12,8 @@ import type { Actor, AutonomyConditions } from "@zest/shared";
 import {
   agentRoleEnum,
   automationKindEnum,
+  changeRequestKindEnum,
+  changeRequestStatusEnum,
   agentRunStatusEnum,
   agentTriggerEnum,
   autonomyActionEnum,
@@ -202,4 +204,38 @@ export const messages = pgTable(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("messages_conversation_idx").on(t.conversationId, t.createdAt)],
+);
+
+/**
+ * Changes the agent wants to make to itself, awaiting a human decision.
+ *
+ * Posts and replies are domain rows with their own state machine, but a
+ * proposed rewrite of the strategy — or a request to stop asking permission —
+ * had nowhere to live. They were announced to the inbox and then invisible,
+ * which made two thirds of the approval story a promise the UI could not keep.
+ */
+export const changeRequests = pgTable(
+  "change_requests",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    kind: changeRequestKindEnum().notNull(),
+    status: changeRequestStatusEnum().notNull().default("pending"),
+    /** Human-readable one-liner for the inbox card. */
+    summary: text().notNull(),
+    /** Why the agent wants this. */
+    rationale: text(),
+    /**
+     * memory: { kind, accountId?, contentMd, before? }
+     * autonomy: { action, connectorId?, accountId? }
+     */
+    payload: jsonb().$type<Record<string, unknown>>().notNull(),
+    agentRunId: uuid().references(() => agentRuns.id, { onDelete: "set null" }),
+    resolvedBy: text(),
+    resolvedAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("change_requests_pending_idx").on(t.workspaceId, t.status)],
 );

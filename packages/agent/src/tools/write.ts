@@ -1,6 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { eq, schema } from "@zest/db";
-import { autonomy, emit, memory, transition } from "@zest/core";
+import { autonomy, changeRequests, emit, memory, transition } from "@zest/core";
 import { getConnector } from "@zest/connectors";
 import { z } from "zod";
 import { readToolContext, type ToolContext } from "../context.ts";
@@ -325,29 +325,25 @@ export const updateMemory = createTool({
       input.kind,
       input.accountId,
     );
-    const [proposal] = await db
-      .insert(schema.auditLogs)
-      .values({
-        workspaceId,
-        entityType: "memory_proposal",
-        entityId: current?.id ?? workspaceId,
-        action: "propose_memory_update",
-        actor,
-        diff: {
-          kind: input.kind,
-          accountId: input.accountId ?? null,
-          reason: input.reason,
-          before: current?.contentMd ?? null,
-          after: input.contentMd,
-        },
-        agentRunId: runId,
-      })
-      .returning();
+    const label = input.kind.replace("_", " ");
+    const proposal = await changeRequests.open(db, {
+      workspaceId,
+      kind: "memory",
+      summary: `Proposed rewrite of ${label}`,
+      rationale: input.reason,
+      payload: {
+        kind: input.kind,
+        accountId: input.accountId ?? null,
+        before: current?.contentMd ?? null,
+        after: input.contentMd,
+      },
+      agentRunId: runId,
+    });
 
     await announce(
       toolContext,
-      `Proposed an update to ${input.kind.replace("_", " ")}`,
-      proposal?.id ?? workspaceId,
+      `Proposed an update to ${label}`,
+      proposal.id,
       "memory",
     );
     return {
@@ -381,28 +377,25 @@ export const requestAutonomy = createTool({
       };
     }
 
-    const [request] = await db
-      .insert(schema.auditLogs)
-      .values({
-        workspaceId,
-        entityType: "autonomy_request",
-        entityId: workspaceId,
-        action: "request_autonomy",
-        actor,
-        diff: {
-          action: input.action,
-          connectorId: input.connectorId ?? null,
-          rationale: input.rationale,
-          consecutiveCleanApprovals: stats.consecutiveCleanApprovals,
-        },
-        agentRunId: runId,
-      })
-      .returning();
+    const label = input.action.replace(/_/g, " ");
+    const request = await changeRequests.open(db, {
+      workspaceId,
+      kind: "autonomy",
+      summary: `Asking to ${label} without review`,
+      rationale: `${input.rationale} (${stats.consecutiveCleanApprovals} proposals approved unchanged in a row.)`,
+      payload: {
+        action: input.action,
+        connectorId: input.connectorId ?? null,
+        accountId: null,
+        consecutiveCleanApprovals: stats.consecutiveCleanApprovals,
+      },
+      agentRunId: runId,
+    });
 
     await announce(
       toolContext,
-      `Requested autonomy for ${input.action}`,
-      request?.id ?? workspaceId,
+      `Requested autonomy for ${label}`,
+      request.id,
       "autonomy_request",
     );
     return { ok: true, outcome: "awaiting_approval" };

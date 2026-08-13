@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { and, desc, eq, schema, type Database } from "@zest/db";
-import { analytics, approvals, audit, memory } from "@zest/core";
+import { analytics, approvals, audit, changeRequests, memory } from "@zest/core";
 import type { Actor } from "@zest/shared";
 import { z } from "zod";
 
@@ -62,17 +62,38 @@ export function createZestMcpServer(context: McpContext): McpServer {
     {
       title: "Approve an item",
       description:
-        "Approve a proposed post or drafted reply. A post with a suggested time is scheduled at the same moment.",
+        "Approve anything in the inbox: a proposed post, a drafted reply, a rewrite of a memory document, or a request to act without review. A post with a suggested time is scheduled at the same moment.",
       inputSchema: {
         id: z.string().describe("The inbox item id"),
-        kind: z.enum(["post", "reply"]).default("post"),
+        kind: z
+          .enum(["post", "reply", "memory", "autonomy_request"])
+          .default("post")
+          .describe("The kind reported by list_pending_approvals"),
         text: z
           .string()
           .optional()
-          .describe("Replacement text, to approve with an edit"),
+          .describe("Replacement text, to approve with an edit (posts and replies only)"),
       },
     },
     async ({ id, kind, text }) => {
+      // Approving a memory rewrite or an autonomy request is not a status
+      // flip — it rewrites the document the next run reads, or grants a
+      // standing rule. Same core function the web UI calls.
+      if (kind === "memory" || kind === "autonomy_request") {
+        const result = await changeRequests.approve(db, workspaceId, id, actor);
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                result.kind === "memory"
+                  ? `Approved. ${result.applied} is now the version the agent reads.`
+                  : `Approved. The agent may now ${result.applied.replace(/_/g, " ")} without asking; revoke it any time.`,
+            },
+          ],
+        };
+      }
+
       if (kind === "reply") {
         await approvals.approveReplyDraft(
           db,
@@ -103,15 +124,18 @@ export function createZestMcpServer(context: McpContext): McpServer {
     "reject",
     {
       title: "Reject an item",
-      description: "Reject a proposed post or drafted reply, optionally saying why.",
+      description:
+        "Reject anything in the inbox — a post, a reply, a memory rewrite, or an autonomy request — optionally saying why.",
       inputSchema: {
         id: z.string(),
-        kind: z.enum(["post", "reply"]).default("post"),
+        kind: z.enum(["post", "reply", "memory", "autonomy_request"]).default("post"),
         reason: z.string().optional(),
       },
     },
     async ({ id, kind, reason }) => {
-      if (kind === "reply") {
+      if (kind === "memory" || kind === "autonomy_request") {
+        await changeRequests.reject(db, workspaceId, id, actor, reason);
+      } else if (kind === "reply") {
         await approvals.rejectReplyDraft(db, id, actor);
       } else {
         await approvals.rejectPost(db, id, actor, reason);

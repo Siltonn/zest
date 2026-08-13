@@ -41,8 +41,32 @@ docker compose up
 Then open <http://localhost:3000>.
 
 Without an LLM key the full platform loop still works — compose, schedule, publish,
-simulated engagement, analytics. Add `ANTHROPIC_API_KEY` to `.env` to switch on planning,
-drafting, reply triage and analysis.
+simulated engagement, analytics, and answering comments by hand. Add `ANTHROPIC_API_KEY`
+to `.env` to switch on planning, drafting, reply triage and analysis.
+
+### Your first ten minutes
+
+The dashboard walks you through this and ticks each step off as it is actually done,
+so there is nothing to memorise:
+
+1. **Connect an account.** Pomelo is built in and needs no credentials — it is a
+   working social network with a simulated audience, so the whole loop runs offline.
+   Connecting writes a starter voice card for the account.
+2. **Say who the brand is.** One page in `/memory`: what you build, who it is for,
+   what you never say. Every run reads this first.
+3. **Give each account a voice.** Edit the starter card. A founder account and a
+   company account should not sound alike, and the agent will not invent the
+   difference for you.
+4. **Run the first plan.** The agent researches what is moving and proposes posts per
+   account. Nothing publishes — proposals land in `/inbox`.
+5. **Approve, edit, or send one back** with a note. Approving schedules it.
+6. **Fast-forward a day.** Scheduled posts publish, the simulated audience reacts, and
+   their comments come back for triage.
+
+From there it runs on its own: planning on your chosen cadence, engagement polling
+every five minutes, a nightly analysis that proposes what it learned, and a weekly
+report on Monday morning. Everything it wants to change about itself — a strategy
+rewrite, a request to stop asking permission — arrives in the same inbox as the posts.
 
 ### Local development
 

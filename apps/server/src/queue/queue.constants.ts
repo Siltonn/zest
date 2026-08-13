@@ -28,4 +28,20 @@ export const REPEATABLE_JOBS = {
   pollEngagement: { queue: QUEUE_INGEST, name: "poll-engagement", pattern: "*/5 * * * *" },
   /** Re-enqueues anything the publish sweep dropped (DB/Redis divergence). */
   reconcile: { queue: QUEUE_PUBLISH, name: "reconcile", pattern: "*/10 * * * *" },
+  /**
+   * Nightly review of what the day's posts actually did. Without this the
+   * strategy document only ever changes when somebody remembers to ask, which
+   * is not an agent that learns — it is a button that summarises.
+   */
+  nightlyAnalysis: {
+    queue: QUEUE_AGENT_RUN,
+    name: "analyze-all",
+    pattern: "30 2 * * *",
+  },
+  /** Monday morning: the week in review, with what it plans to do next. */
+  weeklyReport: {
+    queue: QUEUE_AGENT_RUN,
+    name: "report-all",
+    pattern: "0 8 * * 1",
+  },
 } as const;

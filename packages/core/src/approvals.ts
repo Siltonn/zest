@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, schema, sql, type Database } from "@zest/db";
 import type { Actor, PostContent } from "@zest/shared";
 import { transition } from "./state-machine.ts";
+import * as changeRequests from "./change-requests.ts";
 
 /**
  * The approval inbox.
@@ -28,6 +29,8 @@ export type InboxItem = {
   createdAt: Date;
   /** Present on reply drafts: what the agent is answering. */
   context?: { author: string; text: string; sentiment?: string | null };
+  /** Present on memory proposals: the document as it stands today. */
+  before?: string | null;
 };
 
 export async function listInbox(
@@ -92,6 +95,46 @@ export async function listInbox(
     createdAt: post.createdAt,
   }));
 
+  // A persona proposal can name an account that has nothing else pending, so
+  // the handle has to come from the account list rather than the rows above.
+  const accountsById = new Map(
+    (
+      await db
+        .select()
+        .from(schema.linkedAccounts)
+        .where(eq(schema.linkedAccounts.workspaceId, workspaceId))
+    ).map((account) => [account.id, account]),
+  );
+
+  const changes: InboxItem[] = (
+    await changeRequests.listPending(db, workspaceId)
+  ).map((request) => {
+    const memoryPayload =
+      request.kind === "memory"
+        ? (request.payload as unknown as changeRequests.MemoryPayload)
+        : null;
+    const account = memoryPayload?.accountId
+      ? accountsById.get(memoryPayload.accountId)
+      : undefined;
+
+    return {
+      id: request.id,
+      kind: request.kind === "memory" ? "memory" : "autonomy_request",
+      workspaceId: request.workspaceId,
+      title: request.summary,
+      body: memoryPayload
+        ? memoryPayload.after
+        : (request.rationale ?? "The agent is asking to act without review."),
+      accountId: account?.id,
+      accountHandle: account?.handle,
+      connectorId: account?.connectorId,
+      reasoning: request.rationale,
+      agentRunId: request.agentRunId,
+      createdAt: request.createdAt,
+      before: memoryPayload?.before ?? null,
+    };
+  });
+
   const replies: InboxItem[] = replyRows.map(({ draft, inbound, account }) => ({
     id: draft.id,
     kind: "reply",
@@ -111,7 +154,7 @@ export async function listInbox(
     },
   }));
 
-  return [...posts, ...replies].sort(
+  return [...posts, ...replies, ...changes].sort(
     (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
 }
@@ -135,7 +178,8 @@ export async function inboxCount(db: Database, workspaceId: string): Promise<num
         inArray(schema.replyDrafts.status, ["pending_approval", "needs_changes"]),
       ),
     );
-  return (postCount?.n ?? 0) + (replyCount?.n ?? 0);
+  const changeCount = await changeRequests.pendingCount(db, workspaceId);
+  return (postCount?.n ?? 0) + (replyCount?.n ?? 0) + changeCount;
 }
 
 /**

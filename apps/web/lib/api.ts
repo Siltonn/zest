@@ -120,6 +120,23 @@ export type InboxItem = {
   agentRunId: string | null;
   createdAt: string;
   context?: { author: string; text: string; sentiment?: string | null };
+  /** Memory proposals only: the document as it stands, for the diff. */
+  before?: string | null;
+};
+
+export type OnboardingStep = {
+  id: string;
+  title: string;
+  description: string;
+  href: string;
+  cta: string;
+  done: boolean;
+};
+
+export type OnboardingState = {
+  complete: boolean;
+  doneCount: number;
+  steps: OnboardingStep[];
 };
 
 export type AnalyticsResponse = {

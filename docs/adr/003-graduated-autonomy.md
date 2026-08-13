@@ -26,6 +26,23 @@ writes a proposal and tells the model "sent for approval"; with an `auto` rule t
 performs the action. The tool body and the prompt are identical either way — only the
 operator's granted trust differs.
 
+### Three things get approved, so three things need rows
+
+Content is the obvious one, but the agent also proposes changes to *itself*: a rewrite of
+the strategy document, or a request to stop asking permission for something. Those started
+out as audit-log entries, which was a mistake worth recording — an audit row describes
+something that happened, and a proposal is something that has *not* happened yet. It had no
+status to claim, so nothing could list it as pending, decide it once, or refuse a second
+decision. The tools announced these proposals to the inbox and the inbox had nowhere to put
+them; two thirds of the approval story were invisible.
+
+They now live in `change_requests` with a `pending → approved | rejected` status, claimed by
+the same conditional `UPDATE` the publishing path uses, for the same reason: approving twice
+must not grant the rule twice. Approving one is not bookkeeping — it writes the next version
+of the memory document the agent reads, or grants the autonomy rule that changes what every
+tool may do afterwards. Because they are ordinary rows, they list, deep-link, and approve
+over MCP exactly like a post does.
+
 ## Why not pause the agent
 
 1. **Nothing resumes.** A planning run proposes five posts and is finished. Hours later a

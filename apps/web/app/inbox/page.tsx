@@ -4,7 +4,34 @@ import { Button, Card, Chip, Spinner, TextArea } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ChangeEvent } from "react";
 import { api, type InboxItem } from "@/lib/api";
+import { DiffView } from "@/components/diff";
+import { Unanswered } from "@/components/unanswered";
 import { relativeTime, formatDateTime } from "@/lib/format";
+
+/**
+ * Where a decision on this item is sent. Posts and replies are domain rows;
+ * memory rewrites and autonomy requests are change requests, and approving one
+ * rewrites a document or grants a rule rather than scheduling anything.
+ */
+function endpointFor(item: InboxItem, action: string): string {
+  if (item.kind === "reply") return `/replies/${item.id}/${action}`;
+  if (item.kind === "post") return `/posts/${item.id}/${action}`;
+  return `/changes/${item.id}/${action}`;
+}
+
+const KIND_LABEL: Record<InboxItem["kind"], string> = {
+  post: "post",
+  reply: "reply",
+  memory: "memory",
+  autonomy_request: "autonomy",
+};
+
+const KIND_COLOR: Record<InboxItem["kind"], "warning" | "accent" | "success"> = {
+  post: "warning",
+  reply: "accent",
+  memory: "accent",
+  autonomy_request: "success",
+};
 
 /**
  * The approval inbox — where graduated autonomy is actually operated.
@@ -25,6 +52,12 @@ export default function InboxPage() {
     queryFn: () => api.get<InboxItem[]>("/inbox"),
   });
 
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => api.get<{ capabilities?: { llm: boolean } }>("/me"),
+  });
+  const canThink = me?.capabilities?.llm ?? true;
+
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["inbox"] });
     void queryClient.invalidateQueries({ queryKey: ["inbox-count"] });
@@ -33,23 +66,18 @@ export default function InboxPage() {
 
   const approve = useMutation({
     mutationFn: ({ item, text }: { item: InboxItem; text?: string }) =>
-      api.post(
-        item.kind === "reply"
-          ? `/replies/${item.id}/approve`
-          : `/posts/${item.id}/approve`,
-        text ? { text } : {},
-      ),
+      api.post(endpointFor(item, "approve"), text ? { text } : {}),
     onSuccess: () => {
       setEditing(null);
       refresh();
+      // Approving a change request rewrites memory or grants a rule.
+      void queryClient.invalidateQueries({ queryKey: ["memory"] });
+      void queryClient.invalidateQueries({ queryKey: ["autonomy"] });
     },
   });
 
   const reject = useMutation({
-    mutationFn: (item: InboxItem) =>
-      api.post(
-        item.kind === "reply" ? `/replies/${item.id}/reject` : `/posts/${item.id}/reject`,
-      ),
+    mutationFn: (item: InboxItem) => api.post(endpointFor(item, "reject")),
     onSuccess: refresh,
   });
 
@@ -79,7 +107,7 @@ export default function InboxPage() {
       if (event.key === "k") setCursor((c) => Math.max(c - 1, 0));
       if (event.key === "a") approve.mutate({ item: active });
       if (event.key === "r") reject.mutate(active);
-      if (event.key === "e") {
+      if (event.key === "e" && (active.kind === "post" || active.kind === "reply")) {
         setEditing(active.id);
         setDraft(active.body);
       }
@@ -115,6 +143,10 @@ export default function InboxPage() {
         )}
       </header>
 
+      <div className="mb-3">
+        <Unanswered canThink={canThink} />
+      </div>
+
       {items.length === 0 ? (
         <Card>
           <Card.Content className="py-12 text-center">
@@ -145,12 +177,8 @@ export default function InboxPage() {
                       )}
                     </div>
                   </div>
-                  <Chip
-                    size="sm"
-                    variant="soft"
-                    color={item.kind === "reply" ? "accent" : "warning"}
-                  >
-                    {item.kind}
+                  <Chip size="sm" variant="soft" color={KIND_COLOR[item.kind]}>
+                    {KIND_LABEL[item.kind]}
                   </Chip>
                 </Card.Header>
 
@@ -173,6 +201,17 @@ export default function InboxPage() {
                       rows={5}
                       autoFocus
                     />
+                  ) : item.kind === "memory" ? (
+                    <DiffView before={item.before ?? ""} after={item.body} />
+                  ) : item.kind === "autonomy_request" ? (
+                    <div className="rounded-lg border border-success/30 bg-success/5 px-3 py-2.5 text-sm">
+                      <p className="leading-relaxed">{item.body}</p>
+                      <p className="mt-1.5 text-xs opacity-60">
+                        Approving grants a standing rule. The agent keeps using the same
+                        tools — they stop asking first. You can revoke it any time on the
+                        autonomy page.
+                      </p>
+                    </div>
                   ) : (
                     <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
                       {item.body}
@@ -182,7 +221,9 @@ export default function InboxPage() {
                   {item.reasoning && (
                     <details className="text-sm">
                       <summary className="cursor-pointer opacity-50 hover:opacity-80">
-                        Why the agent proposed this
+                        {item.kind === "autonomy_request"
+                          ? "Why it thinks it has earned this"
+                          : "Why the agent proposed this"}
                       </summary>
                       <p className="mt-1.5 opacity-70">{item.reasoning}</p>
                       {item.agentRunId && (
@@ -244,16 +285,18 @@ export default function InboxPage() {
                       >
                         Approve
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onPress={() => {
-                          setEditing(item.id);
-                          setDraft(item.body);
-                        }}
-                      >
-                        Edit
-                      </Button>
+                      {(item.kind === "post" || item.kind === "reply") && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onPress={() => {
+                            setEditing(item.id);
+                            setDraft(item.body);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      )}
                       {item.kind === "post" && (
                         <Button
                           size="sm"

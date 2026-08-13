@@ -15,7 +15,7 @@ import { InjectQueue } from "@nestjs/bullmq";
 import type { Queue } from "bullmq";
 import { randomBytes, createHash } from "node:crypto";
 import { and, desc, eq, schema, type Database } from "@zest/db";
-import { analytics, audit, autonomy, memory } from "@zest/core";
+import { analytics, audit, autonomy, memory, onboarding } from "@zest/core";
 import { getConnector, listConnectorMeta } from "@zest/connectors";
 import { getTokenVault } from "@zest/shared";
 import {
@@ -181,8 +181,34 @@ export class WorkspaceController {
           : null,
       })
       .returning();
+    if (!account) throw new BadRequestException("Could not save the account");
 
-    return { id: account?.id, handle: profile.handle };
+    // A connected account with no voice card makes the agent write in nobody's
+    // voice. Seeding a starter one means the first planning run has something
+    // to work from, and gives the operator something concrete to edit rather
+    // than a blank page.
+    await memory.writeMemory(this.db, {
+      workspaceId: req.workspaceId,
+      kind: "persona",
+      accountId: account.id,
+      contentMd: onboarding.starterPersona({
+        handle: profile.handle,
+        displayName: profile.displayName ?? profile.handle,
+        platform: connector.meta.name,
+      }),
+      actor: { kind: "system", source: "connect-account" },
+    });
+
+    return { id: account.id, handle: profile.handle };
+  }
+
+  /**
+   * What this workspace still has to do before the loop closes. Computed from
+   * real state rather than a dismissed flag, so it stays honest.
+   */
+  @Get("onboarding")
+  async onboardingState(@Req() req: AuthedRequest) {
+    return onboarding.readOnboarding(this.db, req.workspaceId);
   }
 
   @Delete("accounts/:id")

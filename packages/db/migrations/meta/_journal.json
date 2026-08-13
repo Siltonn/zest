@@ -43,6 +43,13 @@
       "when": 1786610330717,
       "tag": "0005_silky_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786611961572,
+      "tag": "0006_tough_omega_sentinel",
+      "breakpoints": true
     }
   ]
 }
