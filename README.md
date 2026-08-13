@@ -154,8 +154,8 @@ Every one of these is "add one file", by design:
 | ✅ | **M4** Full loop + HITL | Reply triage, analysis runs, autonomy rules, notifications |
 | ✅ | **M5** Reach + polish | Bluesky, Mastodon, REST API, MCP server, tests, docs |
 | ✅ | **M6** Engagement automation | Auto-plug, auto-reply, auto-DM — all autonomy-gated |
-| ✅ | **M7** Agent team | Researcher → strategist → copywriter pipeline, team view |
-| ✅ | **M8** Content wind tunnel | Pre-publish A/B against the simulated audience |
+| ✅ | **M7** Agent team | Research once → strategist per plan → writer per account, team view |
+| ✅ | **M8** Content wind tunnel | Pre-publish A/B against the simulated audience, winner promotable |
 
 Next: Threads and X connectors, outbound webhooks, a CLI, and draft comments so an agent and
 a human can discuss a post before it ships.

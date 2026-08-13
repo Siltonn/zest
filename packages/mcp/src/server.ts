@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { and, desc, eq, schema, type Database } from "@zest/db";
-import { analytics, approvals, audit, changeRequests, memory } from "@zest/core";
+import { analytics, approvals, audit, changeRequests, memory, plans } from "@zest/core";
 import type { Actor } from "@zest/shared";
 import { z } from "zod";
 
@@ -19,6 +19,12 @@ export type McpContext = {
   db: Database;
   workspaceId: string;
   actor: Actor;
+  /**
+   * Releasing a planned week means enqueuing work, and the queue belongs to the
+   * server rather than this package — so the host supplies the callback and
+   * this stays a pure view over domain services.
+   */
+  onApprovePlan?: (planId: string, accountIds: string[]) => Promise<void>;
 };
 
 export function createZestMcpServer(context: McpContext): McpServer {
@@ -27,7 +33,7 @@ export function createZestMcpServer(context: McpContext): McpServer {
     version: "0.1.0",
   });
 
-  const { db, workspaceId, actor } = context;
+  const { db, workspaceId, actor, onApprovePlan } = context;
 
   server.registerTool(
     "list_pending_approvals",
@@ -66,7 +72,7 @@ export function createZestMcpServer(context: McpContext): McpServer {
       inputSchema: {
         id: z.string().describe("The inbox item id"),
         kind: z
-          .enum(["post", "reply", "memory", "autonomy_request"])
+          .enum(["post", "reply", "memory", "autonomy_request", "plan"])
           .default("post")
           .describe("The kind reported by list_pending_approvals"),
         text: z
@@ -76,6 +82,28 @@ export function createZestMcpServer(context: McpContext): McpServer {
       },
     },
     async ({ id, kind, text }) => {
+      // A planned week releases to the writers rather than publishing
+      // anything: approving here means "yes, write these".
+      if (kind === "plan") {
+        const accountIds = await plans.accountsWithPendingItems(db, id);
+        if (accountIds.length === 0) {
+          return {
+            content: [
+              { type: "text", text: "Nothing is waiting to be written on that plan." },
+            ],
+          };
+        }
+        await onApprovePlan?.(id, accountIds);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Approved. ${accountIds.length} writer(s) will turn those topics into drafts, which come back for approval.`,
+            },
+          ],
+        };
+      }
+
       // Approving a memory rewrite or an autonomy request is not a status
       // flip — it rewrites the document the next run reads, or grants a
       // standing rule. Same core function the web UI calls.
@@ -128,12 +156,19 @@ export function createZestMcpServer(context: McpContext): McpServer {
         "Reject anything in the inbox — a post, a reply, a memory rewrite, or an autonomy request — optionally saying why.",
       inputSchema: {
         id: z.string(),
-        kind: z.enum(["post", "reply", "memory", "autonomy_request"]).default("post"),
+        kind: z
+          .enum(["post", "reply", "memory", "autonomy_request", "plan"])
+          .default("post"),
         reason: z.string().optional(),
       },
     },
     async ({ id, kind, reason }) => {
-      if (kind === "memory" || kind === "autonomy_request") {
+      if (kind === "plan") {
+        const found = await plans.readPlan(db, workspaceId, id);
+        for (const item of (found?.items ?? []).filter((i) => i.status === "planned")) {
+          await plans.skipItem(db, workspaceId, item.id);
+        }
+      } else if (kind === "memory" || kind === "autonomy_request") {
         await changeRequests.reject(db, workspaceId, id, actor, reason);
       } else if (kind === "reply") {
         await approvals.rejectReplyDraft(db, id, actor);
