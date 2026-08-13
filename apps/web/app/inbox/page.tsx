@@ -8,6 +8,7 @@ import {
   Kbd,
   Spinner,
   TextArea,
+  toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ChangeEvent } from "react";
@@ -98,11 +99,26 @@ export default function InboxPage() {
 
   const requestChanges = useMutation({
     mutationFn: ({ item, note }: { item: InboxItem; note: string }) =>
-      api.post(`/posts/${item.id}/request-changes`, { feedback: note }),
-    onSuccess: () => {
+      api.post<{ reworking: boolean; note?: string }>(
+        `/posts/${item.id}/request-changes`,
+        { feedback: note },
+      ),
+    onSuccess: (result) => {
       setFeedback(null);
       refresh();
+      // Saying which of the two happened matters: one of them means walking
+      // away, the other means it is now your turn to edit.
+      toast.success(
+        result.reworking ? "Sent back for a rewrite" : "Sent back",
+        {
+          description:
+            result.note ?? "The copywriter is revising it against your note.",
+        },
+      );
+      setTimeout(refresh, 6000);
     },
+    onError: (error: Error) =>
+      toast.danger("Could not send it back", { description: error.message }),
   });
 
   const active = items[cursor];

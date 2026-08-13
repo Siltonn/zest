@@ -16,9 +16,10 @@ import type { Queue } from "bullmq";
 import { and, desc, eq, schema, type Database } from "@zest/db";
 import { approvals, audit, changeRequests, transition } from "@zest/core";
 import { getConnector, listConnectorMeta } from "@zest/connectors";
+import { hasModelAccess } from "@zest/agent";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
-import { QUEUE_PUBLISH } from "../queue/queue.constants.js";
+import { QUEUE_AGENT_RUN, QUEUE_PUBLISH } from "../queue/queue.constants.js";
 import { enqueueUnique } from "../queue/enqueue.js";
 import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
 
@@ -48,6 +49,7 @@ export class PostsController {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @InjectQueue(QUEUE_PUBLISH) private readonly publishQueue: Queue,
+    @InjectQueue(QUEUE_AGENT_RUN) private readonly agentQueue: Queue,
   ) {}
 
   @Get("platforms")
@@ -183,7 +185,19 @@ export class PostsController {
   ) {
     if (!body?.feedback) throw new BadRequestException("Feedback is required");
     await approvals.requestChanges(this.db, id, req.actor, body.feedback);
-    return { ok: true };
+
+    // The note is only worth writing if something reads it. With no model
+    // configured the post still waits in the inbox for a human edit, and the
+    // response says which of the two happened.
+    if (hasModelAccess()) {
+      await enqueueUnique(this.agentQueue, "rework", { workspaceId: req.workspaceId, postId: id }, `rework-${id}`);
+      return { ok: true, reworking: true };
+    }
+    return {
+      ok: true,
+      reworking: false,
+      note: "No model is configured, so this is waiting for you to edit it.",
+    };
   }
 
   @HttpPost("posts/:id/schedule")

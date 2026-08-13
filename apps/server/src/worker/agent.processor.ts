@@ -4,7 +4,14 @@ import type { Job, Queue } from "bullmq";
 import type { Redis } from "ioredis";
 import { eq, schema, type Database } from "@zest/db";
 import { Notifier, approvals, autonomy, emit, plans } from "@zest/core";
-import { runAnalysis, runCopy, runReplyTriage, runResearch, runStrategy } from "@zest/agent";
+import {
+  runAnalysis,
+  runCopy,
+  runReplyTriage,
+  runResearch,
+  runRework,
+  runStrategy,
+} from "@zest/agent";
 import { DATABASE } from "../infra/database.module.js";
 import { REDIS_PUB } from "../infra/redis.module.js";
 import { NOTIFIER } from "../infra/notifier.module.js";
@@ -167,6 +174,26 @@ export class AgentProcessor extends WorkerHost {
           await this.queue.add("plan-research", { workspaceId: workspace.id });
         }
         return { planned: workspaces.length };
+      }
+
+      /**
+       * A draft sent back with a note. This is the difference between "ask for
+       * changes" and "reject" — the operator says what is wrong once and the
+       * revision comes back, rather than the note sitting unread.
+       */
+      case "rework": {
+        const result = await runRework({
+          db: this.db,
+          workspaceId,
+          postId: job.data.postId as string,
+          publisher: this.redis,
+        });
+        if (result.skipped) {
+          this.logger.warn(`Rework skipped: ${result.skipped}`);
+          return result;
+        }
+        await this.notifyPending(workspaceId, "A revised post is waiting for review");
+        return result;
       }
 
       /**

@@ -63,9 +63,11 @@ so there is nothing to memorise:
    same mechanism. Research happens once, a strategist plans each programme into concrete
    items, and a writer takes one account at a time so the voices stay apart. Nothing
    publishes — proposals land in `/inbox`.
-5. **Approve, edit, or send one back** with a note. Approving schedules it. Reviews
-   happen at two altitudes: the planned week arrives as one card you can prune before
-   anything is written, and the finished drafts arrive individually.
+5. **Approve, edit, or send one back** with a note — the copywriter revises against the
+   note and the result comes back for review, so review is a conversation rather than a
+   veto. Approving schedules it. Reviews happen at two altitudes: the planned week
+   arrives as one card you can prune before anything is written, and the finished drafts
+   arrive individually.
 6. **Fast-forward a day.** Scheduled posts publish, the simulated audience reacts, and
    their comments come back for triage.
 

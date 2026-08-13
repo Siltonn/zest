@@ -69,7 +69,10 @@ it to the copywriters, so drafts come back for a second review. Approving a memo
 rewrite replaces the document the next run reads. Approving an autonomy request grants a
 standing rule — say so plainly, and mention it is revocable.
 
-Sending a post back is usually better than rejecting it:
+Sending a post back is usually better than rejecting it — the copywriter revises
+against your note and the result returns for review, so the note is worth writing
+properly. (With no model configured the post waits for a human edit instead; the
+response tells you which happened.)
 
 ```bash
 curl -s -X POST -H "Authorization: Bearer $ZEST_API_KEY" -H 'content-type: application/json' \
