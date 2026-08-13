@@ -1,0 +1,23 @@
+@import "tailwindcss";
+@import "@heroui/styles/css";
+
+/* HeroUI publishes dark values under .dark / [data-theme="dark"] and does not
+   watch prefers-color-scheme itself, so the theme class is set on <html> in
+   layout.tsx. Painting the body from the tokens keeps the page surface and the
+   components on the same theme instead of light cards on a dark page. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+:root {
+  --zest-citrus: oklch(0.82 0.17 96);
+  --zest-pomelo: oklch(0.72 0.16 25);
+}

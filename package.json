@@ -1,0 +1,27 @@
+{
+  "name": "zest",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Open-source AI social media operations agent",
+  "license": "MIT",
+  "packageManager": "pnpm@11.3.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "db:generate": "pnpm --filter @zest/db generate",
+    "db:migrate": "pnpm --filter @zest/db migrate",
+    "db:studio": "pnpm --filter @zest/db studio",
+    "demo": "pnpm --filter @zest/db seed"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "turbo": "^2.10.9",
+    "typescript": "^5.7.2"
+  }
+}

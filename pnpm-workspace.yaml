@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  # drizzle-kit runs esbuild to load drizzle.config.ts
+  esbuild: true
+  # optional native msgpack acceleration for BullMQ job payloads
+  msgpackr-extract: true
