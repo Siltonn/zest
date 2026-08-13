@@ -209,7 +209,7 @@ export class PostsController {
       actor: req.actor,
       patch: { scheduledAt: new Date() },
     });
-    await this.publishQueue.add("publish-post", { postId: id }, { jobId: `publish:${id}` });
+    await this.publishQueue.add("publish-post", { postId: id }, { jobId: `publish-${id}` });
     return { ok: true };
   }
 
@@ -259,7 +259,7 @@ export class PostsController {
     await this.publishQueue.add(
       "send-reply",
       { replyDraftId: draft.id },
-      { jobId: `reply:${draft.id}` },
+      { jobId: `reply-${draft.id}` },
     );
     return { ok: true };
   }

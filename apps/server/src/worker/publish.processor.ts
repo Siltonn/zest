@@ -66,7 +66,7 @@ export class PublishProcessor extends WorkerHost {
       await this.queue.add(
         "publish-post",
         { postId: post.id },
-        { jobId: `publish:${post.id}` },
+        { jobId: `publish-${post.id}` },
       );
     }
     return { enqueued: due.length };

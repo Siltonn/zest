@@ -1,4 +1,4 @@
-import { and, eq, schema, sql, type Database } from "@zest/db";
+import { and, eq, gte, schema, sql, type Database } from "@zest/db";
 import type { AutonomyAction, AutonomyMode } from "@zest/shared";
 
 /**
@@ -94,7 +94,7 @@ async function countActionsToday(db: Database, scope: GuardScope): Promise<numbe
         eq(schema.auditLogs.workspaceId, scope.workspaceId),
         eq(schema.auditLogs.action, scope.action),
         sql`${schema.auditLogs.actor}->>'kind' = 'agent'`,
-        sql`${schema.auditLogs.createdAt} >= ${since}`,
+        gte(schema.auditLogs.createdAt, since),
       ),
     );
 

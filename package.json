@@ -17,7 +17,7 @@
     "db:generate": "pnpm --filter @zest/db generate",
     "db:migrate": "pnpm --filter @zest/db migrate",
     "db:studio": "pnpm --filter @zest/db studio",
-    "demo": "pnpm --filter @zest/db seed"
+    "demo": "pnpm --filter @zest/seed seed"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

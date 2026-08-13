@@ -1,4 +1,4 @@
-import { and, eq, schema, sql, type Database } from "@zest/db";
+import { and, eq, lt, lte, schema, type Database } from "@zest/db";
 import type { Actor, PostStatus } from "@zest/shared";
 
 /**
@@ -193,7 +193,7 @@ export async function findDuePosts(
     .where(
       and(
         eq(schema.posts.status, "scheduled"),
-        sql`${schema.posts.scheduledAt} <= ${now}`,
+        lte(schema.posts.scheduledAt, now),
       ),
     )
     .limit(limit);
@@ -218,7 +218,7 @@ export async function recoverStalePublishing(
     .where(
       and(
         eq(schema.posts.status, "publishing"),
-        sql`${schema.posts.updatedAt} < ${cutoff}`,
+        lt(schema.posts.updatedAt, cutoff),
       ),
     )
     .returning({ id: schema.posts.id });
@@ -236,7 +236,7 @@ export async function expireStaleProposals(
     .where(
       and(
         eq(schema.posts.status, "pending_approval"),
-        sql`${schema.posts.suggestedSlotAt} < ${now}`,
+        lt(schema.posts.suggestedSlotAt, now),
       ),
     );
   return rows.map((r) => r.id);

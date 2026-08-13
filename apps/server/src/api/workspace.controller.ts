@@ -21,7 +21,11 @@ import { getTokenVault } from "@zest/shared";
 import { advanceClock, ONE_SIM_DAY, readClock } from "@zest/simulator";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
-import { QUEUE_AGENT_RUN, QUEUE_SIMULATOR } from "../queue/queue.constants.js";
+import {
+  QUEUE_AGENT_RUN,
+  QUEUE_INGEST,
+  QUEUE_SIMULATOR,
+} from "../queue/queue.constants.js";
 import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
 
 /** Workspace settings, accounts, memory, autonomy, analytics and audit. */
@@ -32,6 +36,7 @@ export class WorkspaceController {
     @Inject(DATABASE) private readonly db: Database,
     @InjectQueue(QUEUE_AGENT_RUN) private readonly agentQueue: Queue,
     @InjectQueue(QUEUE_SIMULATOR) private readonly simulatorQueue: Queue,
+    @InjectQueue(QUEUE_INGEST) private readonly ingestQueue: Queue,
   ) {}
 
   @Get("workspace")
@@ -320,6 +325,18 @@ export class WorkspaceController {
   @Post("agent/triage")
   async triage(@Req() req: AuthedRequest) {
     const job = await this.agentQueue.add("triage", {
+      workspaceId: req.workspaceId,
+    });
+    return { queued: true, jobId: job.id };
+  }
+
+  /**
+   * Pull engagement now rather than waiting for the polling cron. Useful after
+   * a fast-forward, and for anyone who just wants their numbers refreshed.
+   */
+  @Post("ingest/poll")
+  async pollNow(@Req() req: AuthedRequest) {
+    const job = await this.ingestQueue.add("poll-engagement", {
       workspaceId: req.workspaceId,
     });
     return { queued: true, jobId: job.id };

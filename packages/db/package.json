@@ -22,8 +22,7 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "push": "drizzle-kit push",
-    "studio": "drizzle-kit studio",
-    "seed": "node --experimental-strip-types src/seed.ts"
+    "studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@zest/shared": "workspace:*",

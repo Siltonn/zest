@@ -1,4 +1,4 @@
-import { and, desc, eq, schema, sql, type Database } from "@zest/db";
+import { and, desc, eq, gte, schema, sql, type Database } from "@zest/db";
 
 /**
  * Analytics over `metric_points`. Every platform — Pomelo included — feeds this
@@ -34,7 +34,7 @@ export async function summary(
     .where(
       and(
         eq(schema.metricPoints.workspaceId, workspaceId),
-        sql`${schema.metricPoints.at} >= ${since}`,
+        gte(schema.metricPoints.at, since),
       ),
     )
     .groupBy(schema.metricPoints.metric);
@@ -48,7 +48,7 @@ export async function summary(
       and(
         eq(schema.posts.workspaceId, workspaceId),
         eq(schema.posts.status, "published"),
-        sql`${schema.posts.publishedAt} >= ${since}`,
+        gte(schema.posts.publishedAt, since),
       ),
     );
 
@@ -110,7 +110,7 @@ export async function timeseries(
       and(
         eq(schema.metricPoints.workspaceId, workspaceId),
         eq(schema.metricPoints.metric, metric),
-        sql`${schema.metricPoints.at} >= ${since}`,
+        gte(schema.metricPoints.at, since),
       ),
     )
     .groupBy(sql`to_char(${schema.metricPoints.at}, 'YYYY-MM-DD')`)

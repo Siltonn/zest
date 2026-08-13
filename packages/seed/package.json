@@ -1,0 +1,21 @@
+{
+  "name": "@zest/seed",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Demo seed data — a workspace you can present in under a minute",
+  "scripts": {
+    "seed": "node --experimental-strip-types src/seed.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@zest/db": "workspace:*",
+    "@zest/shared": "workspace:*",
+    "@zest/simulator": "workspace:*",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

@@ -14,7 +14,7 @@ import {
 import { InjectQueue } from "@nestjs/bullmq";
 import type { Queue } from "bullmq";
 import { randomBytes } from "node:crypto";
-import { and, desc, eq, gte, schema, sql, type Database } from "@zest/db";
+import { and, desc, eq, gte, inArray, schema, sql, type Database } from "@zest/db";
 import { readClock, scheduleEngagement } from "@zest/simulator";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
@@ -176,18 +176,20 @@ export class PomeloController {
       .from(schema.pomeloPosts)
       .where(eq(schema.pomeloPosts.authorId, user.id));
 
-    const metrics = posts.flatMap((post) => [
-      { metric: "impressions" as const, value: post.impressions, externalPostId: post.id, at: new Date().toISOString() },
-      { metric: "likes" as const, value: post.likeCount, externalPostId: post.id, at: new Date().toISOString() },
-      { metric: "reposts" as const, value: post.repostCount, externalPostId: post.id, at: new Date().toISOString() },
-      { metric: "replies" as const, value: post.replyCount, externalPostId: post.id, at: new Date().toISOString() },
+    const now = new Date().toISOString();
+    const metrics: {
+      metric: "impressions" | "likes" | "reposts" | "replies" | "followers";
+      value: number;
+      externalPostId?: string;
+      at: string;
+    }[] = posts.flatMap((post) => [
+      { metric: "impressions", value: post.impressions, externalPostId: post.id, at: now },
+      { metric: "likes", value: post.likeCount, externalPostId: post.id, at: now },
+      { metric: "reposts", value: post.repostCount, externalPostId: post.id, at: now },
+      { metric: "replies", value: post.replyCount, externalPostId: post.id, at: now },
     ]);
-    metrics.push({
-      metric: "followers" as never,
-      value: user.followerCount,
-      externalPostId: undefined as never,
-      at: new Date().toISOString(),
-    });
+    // Followers is account-wide, so it carries no post id.
+    metrics.push({ metric: "followers", value: user.followerCount, at: now });
 
     const postIds = posts.map((p) => p.id);
     const replies =
@@ -201,7 +203,7 @@ export class PomeloController {
             )
             .where(
               and(
-                sql`${schema.pomeloReplies.postId} = any(${postIds})`,
+                inArray(schema.pomeloReplies.postId, postIds),
                 gte(schema.pomeloReplies.createdAt, sinceDate),
               ),
             )
