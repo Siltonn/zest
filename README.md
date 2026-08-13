@@ -130,6 +130,53 @@ Design decisions and the arguments behind them are recorded in [`docs/adr/`](doc
 
 There is also an [eight-minute demo script](docs/demo.md).
 
+## Drive it from Claude Desktop
+
+Zest is an agent, and it is also something other agents can drive. The MCP
+endpoint is served by the running instance — no separate process, no stdio wrapper:
+
+```json
+{
+  "mcpServers": {
+    "zest": {
+      "url": "http://localhost:4000/mcp",
+      "headers": { "Authorization": "Bearer zest_…" }
+    }
+  }
+}
+```
+
+Create the key under **Settings → API keys** (or use the one `pnpm demo` prints). Once
+connected you get:
+
+- **Prompts** — *Review my approval queue*, *How did last week go?*, *Draft a post for
+  one account*. Ready-made actions, so the integration is usable without inventing the
+  phrasing yourself.
+- **Resources** — the brand brief, the current strategy, and every plan with its cadence
+  and unwritten items, readable without spending a tool call.
+- **Tools** — list, approve, reject, request changes, propose a post, read analytics and
+  recent activity. Approving a planned week over MCP releases it to the writers exactly
+  as clicking approve in the web UI does.
+
+Everything goes through the same `@zest/core` services as the web UI, so an MCP approval
+is indistinguishable from a clicked one — except in the audit log, which records which
+client did it.
+
+## Drive it from Claude Code
+
+For agents that already live in a terminal, [`skills/`](skills/) ships an Agent Skill that
+operates an instance over the REST API — no server to run and no protocol to implement:
+
+```bash
+cp -r skills/zest-social ~/.claude/skills/
+export ZEST_URL=http://localhost:4000
+export ZEST_API_KEY=zest_…
+```
+
+Then ask *"what's waiting in my Zest queue?"*. The skill knows the product's opinions:
+it reads an account's voice card before drafting, prefers sending a post back over
+rejecting it, and approves nothing you did not ask it to approve.
+
 ## Extension points
 
 Every one of these is "add one file", by design:
@@ -142,6 +189,7 @@ Every one of these is "add one file", by design:
 | A background task | Define a job in the worker role |
 | An event consumer | Subscribe to domain events — the state machine doesn't change |
 | A different agent framework | Swap the adapter; tools are framework-neutral zod functions |
+| An MCP prompt or resource | Register it in `packages/mcp`; it uses the same core services |
 
 ## Roadmap
 

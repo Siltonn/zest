@@ -6,6 +6,7 @@ import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module.js";
 import { loadEnv, runsApi } from "./config.js";
 import { mountBullBoard } from "./queue/bull-board.js";
+import { DomainErrorFilter } from "./api/domain-error.filter.js";
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
@@ -14,6 +15,10 @@ async function bootstrap(): Promise<void> {
 
   app.enableShutdownHooks();
   app.enableCors({ origin: env.WEB_URL, credentials: true });
+
+  // A domain rule rejecting a request should read as a 400 with the reason,
+  // not a 500 that says nothing.
+  app.useGlobalFilters(new DomainErrorFilter());
 
   // Uploaded images are served straight off disk — no CDN, no bucket.
   app.use("/media", express.static(resolve(env.MEDIA_DIR), { maxAge: "1y" }));
@@ -27,6 +32,14 @@ async function bootstrap(): Promise<void> {
   logger.log(
     `zest server listening on :${env.PORT} (MODE=${env.MODE}, api=${runsApi(env.MODE)})`,
   );
+
+  // Loud on purpose. Demo mode is what makes a fresh clone clickable, and it is
+  // also an open door — worth one line in the log rather than a surprise later.
+  if (env.DEMO_MODE && runsApi(env.MODE)) {
+    logger.warn(
+      "DEMO_MODE is on: every request is signed in as the seeded operator and the API needs no credentials. Set DEMO_MODE=false before exposing this instance.",
+    );
+  }
 }
 
 void bootstrap();

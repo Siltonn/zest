@@ -374,6 +374,193 @@ export function createZestMcpServer(context: McpContext): McpServer {
     },
   );
 
+  // ── Prompts ───────────────────────────────────────────────────────────
+  //
+  // Tools are what a client *can* do; prompts are what it should offer to do.
+  // Without them a connected Claude Desktop shows a bare tool list and the
+  // operator has to invent the phrasing — which is the difference between an
+  // integration that gets used and one that gets configured once and forgotten.
+
+  server.registerPrompt(
+    "review_queue",
+    {
+      title: "Review my approval queue",
+      description:
+        "Walk everything waiting for a decision — posts, replies, planned weeks, memory rewrites — and recommend an action for each.",
+    },
+    () => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: [
+              "Call list_pending_approvals and walk what is waiting.",
+              "",
+              "For each item say what it is, what it would do if approved, and",
+              "what you would do — approve, send back with a note, or reject —",
+              "with one line of reasoning. Group by kind and lead with anything",
+              "time-sensitive.",
+              "",
+              "Do not approve anything until I say so.",
+            ].join("\n"),
+          },
+        },
+      ],
+    }),
+  );
+
+  server.registerPrompt(
+    "week_in_review",
+    {
+      title: "How did last week go?",
+      description:
+        "Summarise performance, name what worked, and propose what to change — grounded in the numbers rather than vibes.",
+    },
+    () => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: [
+              "Call get_analytics_summary, get_recent_activity and get_strategy.",
+              "",
+              "Tell me: what actually moved, which posts did the work and what",
+              "they had in common, and one concrete change to the strategy for",
+              "next week. If the numbers are too thin to conclude anything, say",
+              "that instead of inventing a pattern.",
+            ].join("\n"),
+          },
+        },
+      ],
+    }),
+  );
+
+  server.registerPrompt(
+    "draft_for_account",
+    {
+      title: "Draft a post for one account",
+      description:
+        "Write in a specific account's voice and send it for approval, using its voice card rather than a generic tone.",
+      argsSchema: {
+        handle: z.string().describe("The account handle, without the @"),
+        topic: z.string().describe("What the post should be about"),
+      },
+    },
+    ({ handle, topic }) => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: [
+              `Draft a post for @${handle} about: ${topic}`,
+              "",
+              "First call list_accounts to find its id, and get_strategy to read",
+              "the brand brief and that account's voice card. Match the voice —",
+              "a founder account and a company account must not sound alike.",
+              "",
+              "Then call propose_post. It goes to the approval inbox, not live.",
+            ].join("\n"),
+          },
+        },
+      ],
+    }),
+  );
+
+  // ── Resources ─────────────────────────────────────────────────────────
+  //
+  // The documents a client should be able to read without spending a tool call,
+  // and which make its answers specific instead of generic.
+
+  server.registerResource(
+    "brand-brief",
+    "zest://memory/brand_brief",
+    {
+      title: "Brand brief",
+      description: "Who this brand is, who it talks to, and what it never says.",
+      mimeType: "text/markdown",
+    },
+    async (uri) => {
+      const doc = await memory.readMemory(db, workspaceId, "brand_brief");
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "text/markdown",
+            text: doc?.contentMd ?? "No brand brief has been written yet.",
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerResource(
+    "strategy",
+    "zest://memory/strategy",
+    {
+      title: "Current strategy",
+      description: "The plan and cadence the agent is working to.",
+      mimeType: "text/markdown",
+    },
+    async (uri) => {
+      const doc = await memory.readMemory(db, workspaceId, "strategy");
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "text/markdown",
+            text: doc?.contentMd ?? "No strategy recorded yet.",
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerResource(
+    "plans",
+    "zest://plans",
+    {
+      title: "Content programmes",
+      description:
+        "Every plan, its cadence, the accounts it writes for, and what is still unwritten.",
+      mimeType: "text/markdown",
+    },
+    async (uri) => {
+      const all = await plans.listPlans(db, workspaceId);
+      const accounts = await db
+        .select()
+        .from(schema.linkedAccounts)
+        .where(eq(schema.linkedAccounts.workspaceId, workspaceId));
+
+      const text =
+        all.length === 0
+          ? "No plans yet. Without one, nothing is scheduled."
+          : all
+              .map((plan) =>
+                [
+                  `## ${plan.name} (${plan.status}, ${plan.schedule})`,
+                  plan.objective ?? "",
+                  `Accounts: ${plan.accountIds
+                    .map(
+                      (id) =>
+                        `@${accounts.find((a) => a.id === id)?.handle ?? "unknown"}`,
+                    )
+                    .join(", ")}`,
+                  `${plan.itemCounts.planned} planned · ${plan.itemCounts.written} written`,
+                ]
+                  .filter(Boolean)
+                  .join("\n"),
+              )
+              .join("\n\n");
+
+      return {
+        contents: [{ uri: uri.href, mimeType: "text/markdown", text }],
+      };
+    },
+  );
+
   return server;
 }
 

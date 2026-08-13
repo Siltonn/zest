@@ -75,7 +75,9 @@ export class WorkspaceGuard implements CanActivate {
     let userId = session?.user?.id;
 
     // Demo mode signs in as the seeded operator so a fresh clone can be
-    // clicked through immediately. Never enabled by default.
+    // clicked through immediately. `.env.example` ships it on, which means the
+    // documented quick start produces an instance with no auth — deliberate for
+    // a local demo, and the reason boot logs a warning about it.
     if (!userId && loadEnv().DEMO_MODE) {
       const [demoUser] = await this.db.select().from(schema.users).limit(1);
       userId = demoUser?.id;
