@@ -3,7 +3,7 @@ import { Inject, Logger } from "@nestjs/common";
 import type { Job, Queue } from "bullmq";
 import type { Redis } from "ioredis";
 import { and, eq, schema, type Database } from "@zest/db";
-import { analytics, emit } from "@zest/core";
+import { analytics, automations, emit } from "@zest/core";
 import { getConnector } from "@zest/connectors";
 import { classifySentiment } from "@zest/simulator";
 import { DATABASE } from "../infra/database.module.js";
@@ -59,9 +59,77 @@ export class IngestProcessor extends WorkerHost {
       if (newInbound > 0) {
         await this.agentQueue.add("triage", { workspaceId: workspace.id });
       }
+
+      // Engagement automations run right after fresh numbers land, since that
+      // is exactly when a post may have crossed an auto-plug threshold.
+      await this.runAutomations(workspace.id);
     }
 
     return { newInbound };
+  }
+
+  /**
+   * Fires whatever the automation rules say should fire. Each action is
+   * dispatched through the same connector the rest of the system uses, and
+   * recorded in the audit trail so an automated comment is never mistaken for
+   * a human one.
+   */
+  private async runAutomations(workspaceId: string): Promise<void> {
+    const actions = await automations.evaluate(this.db, workspaceId);
+    if (actions.length === 0) return;
+
+    const accounts = await this.db
+      .select()
+      .from(schema.linkedAccounts)
+      .where(eq(schema.linkedAccounts.workspaceId, workspaceId));
+
+    for (const action of actions) {
+      try {
+        if (action.kind === "auto_plug") {
+          const [post] = await this.db
+            .select()
+            .from(schema.posts)
+            .where(eq(schema.posts.id, action.postId));
+          const account = accounts.find((a) => a.id === post?.accountId);
+          if (!account) continue;
+          await getConnector(account.connectorId).reply(
+            toCredentials(account),
+            action.externalPostId,
+            { text: action.text, media: [] },
+          );
+        } else if (action.kind === "auto_reply") {
+          const [item] = await this.db
+            .select()
+            .from(schema.inboundItems)
+            .where(eq(schema.inboundItems.id, action.inboundItemId));
+          const account = accounts.find((a) => a.id === item?.accountId);
+          if (!account || !item) continue;
+          await getConnector(account.connectorId).reply(
+            toCredentials(account),
+            item.externalId,
+            { text: action.text, media: [] },
+          );
+          await this.db
+            .update(schema.inboundItems)
+            .set({ status: "replied" })
+            .where(eq(schema.inboundItems.id, item.id));
+        } else {
+          const account = accounts[0];
+          const connector = account ? getConnector(account.connectorId) : null;
+          if (!account || !connector?.sendDm) continue;
+          await connector.sendDm(toCredentials(account), action.targetHandle, {
+            text: action.text,
+            media: [],
+          });
+        }
+
+        await automations.recordFired(this.db, workspaceId, action);
+      } catch (error) {
+        this.logger.warn(
+          `Automation ${action.kind} failed: ${(error as Error).message}`,
+        );
+      }
+    }
   }
 
   private async ingestAccount(

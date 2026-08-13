@@ -82,3 +82,9 @@ export const simEventKindEnum = pgEnum("sim_event_kind", [
   "reply",
   "follow",
 ]);
+
+export const automationKindEnum = pgEnum("automation_kind", [
+  "auto_plug",
+  "auto_reply",
+  "auto_dm",
+]);

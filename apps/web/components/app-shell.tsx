@@ -18,6 +18,7 @@ const NAV = [
   { href: "/memory", label: "Memory", icon: "❋" },
   { href: "/autonomy", label: "Autonomy", icon: "⚖" },
   { href: "/team", label: "Team", icon: "⚙" },
+  { href: "/lab", label: "Lab", icon: "⚗" },
   { href: "/audit", label: "Audit", icon: "☷" },
   { href: "/pomelo", label: "Pomelo", icon: "🍊" },
   { href: "/accounts", label: "Accounts", icon: "⛓" },

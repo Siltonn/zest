@@ -15,6 +15,13 @@
       "when": 1786603150422,
       "tag": "0001_moaning_runaways",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786604740796,
+      "tag": "0002_watery_red_shift",
+      "breakpoints": true
     }
   ]
 }

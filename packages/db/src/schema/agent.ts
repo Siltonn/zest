@@ -11,6 +11,7 @@ import {
 import type { Actor, AutonomyConditions } from "@zest/shared";
 import {
   agentRoleEnum,
+  automationKindEnum,
   agentRunStatusEnum,
   agentTriggerEnum,
   autonomyActionEnum,
@@ -70,6 +71,33 @@ export const autonomyRules = pgTable(
     grantedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("autonomy_rules_lookup_idx").on(t.workspaceId, t.action)],
+);
+
+/**
+ * Rule-based engagement actions (auto-plug, auto-reply, auto-DM). These are
+ * deliberately rules rather than agent judgement — they should be predictable —
+ * but they still pass through the autonomy guard before firing.
+ */
+export const engagementAutomations = pgTable(
+  "engagement_automations",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    accountId: uuid().references(() => linkedAccounts.id, { onDelete: "cascade" }),
+    kind: automationKindEnum().notNull(),
+    trigger: jsonb()
+      .$type<{
+        threshold?: number;
+        sentiment?: "positive" | "neutral" | "negative";
+        keywords?: string[];
+      }>()
+      .notNull(),
+    template: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("engagement_automations_workspace_idx").on(t.workspaceId)],
 );
 
 export const auditLogs = pgTable(

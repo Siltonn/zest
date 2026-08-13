@@ -5,6 +5,7 @@ export * as autonomy from "./autonomy.ts";
 export * as memory from "./memory.ts";
 export * from "./events.ts";
 export * from "./notify.ts";
+export * as automations from "./automations.ts";
 export * from "./state-machine.ts";
 export type { InboxItem, InboxItemKind } from "./approvals.ts";
 export type { AnalyticsSummary, PostPerformance } from "./analytics.ts";
