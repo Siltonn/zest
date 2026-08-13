@@ -1,0 +1,420 @@
+import { createTool } from "@mastra/core/tools";
+import { eq, schema } from "@zest/db";
+import { autonomy, emit, memory, transition } from "@zest/core";
+import { getConnector } from "@zest/connectors";
+import { z } from "zod";
+import { readToolContext, type ToolContext } from "../context.ts";
+
+/**
+ * Mutating tools.
+ *
+ * Each one asks the autonomy guard what it may do, then either writes a
+ * proposal or performs the action. This is the whole graduated-autonomy idea in
+ * practice: the model sees the same tool with the same description either way,
+ * and the operator's granted trust decides which branch runs. Nothing here
+ * depends on the agent framework, so the behaviour survives swapping it.
+ */
+
+async function announce(
+  context: ToolContext,
+  summary: string,
+  entityId: string,
+  itemKind: "post" | "reply" | "memory" | "autonomy_request",
+): Promise<void> {
+  if (!context.publisher) return;
+  await emit(context.publisher, {
+    type: "inbox.new",
+    workspaceId: context.workspaceId,
+    itemKind,
+    entityId,
+    summary,
+  });
+}
+
+export const draftPost = createTool({
+  id: "draft_post",
+  description:
+    "Check a draft against a platform's limits before proposing it. Returns any problems; does not save anything.",
+  inputSchema: z.object({
+    accountId: z.string(),
+    text: z.string(),
+  }),
+  execute: async (input, { requestContext }) => {
+    const { db, workspaceId } = readToolContext(requestContext);
+    const [account] = await db
+      .select()
+      .from(schema.linkedAccounts)
+      .where(eq(schema.linkedAccounts.id, input.accountId));
+    if (!account) return { ok: false, issues: ["Unknown account"] };
+
+    const connector = getConnector(account.connectorId);
+    const issues = connector.validate({ text: input.text, media: [] });
+    return {
+      ok: !issues.some((i) => i.severity === "error"),
+      platform: connector.meta.name,
+      characters: [...input.text].length,
+      charLimit: connector.meta.charLimit,
+      issues: issues.map((i) => `${i.severity}: ${i.message}`),
+      workspaceId,
+    };
+  },
+});
+
+export const proposePost = createTool({
+  id: "propose_post",
+  description:
+    "Put a post forward for a specific account, with a suggested time and a one-line reason. If autonomy has been granted for this account it is scheduled directly; otherwise it goes to the approval inbox.",
+  inputSchema: z.object({
+    accountId: z.string(),
+    text: z.string(),
+    suggestedSlotAt: z
+      .string()
+      .describe("ISO 8601 timestamp for when this should go out"),
+    reasoning: z
+      .string()
+      .describe("Why this post, for this account, at this time — one or two sentences"),
+  }),
+  execute: async (input, { requestContext }) => {
+    const toolContext = readToolContext(requestContext);
+    const { db, workspaceId, actor, runId } = toolContext;
+
+    const [account] = await db
+      .select()
+      .from(schema.linkedAccounts)
+      .where(eq(schema.linkedAccounts.id, input.accountId));
+    if (!account) return { ok: false, error: "Unknown account" };
+
+    const connector = getConnector(account.connectorId);
+    const content = { text: input.text, media: [] };
+    const issues = connector.validate(content);
+    const blocking = issues.filter((i) => i.severity === "error");
+    if (blocking.length > 0) {
+      // Reported back to the model so it can revise rather than failing the run.
+      return { ok: false, error: blocking.map((i) => i.message).join("; ") };
+    }
+
+    const slot = new Date(input.suggestedSlotAt);
+    const decision = await autonomy.decide(db, {
+      workspaceId,
+      action: "schedule_post",
+      connectorId: account.connectorId,
+      accountId: account.id,
+    });
+
+    const [created] = await db
+      .insert(schema.posts)
+      .values({
+        workspaceId,
+        accountId: account.id,
+        status: "draft",
+        content,
+        suggestedSlotAt: slot,
+        reasoning: input.reasoning,
+        createdByActor: actor,
+        agentRunId: runId,
+      })
+      .returning();
+    if (!created) return { ok: false, error: "Could not create the post" };
+
+    if (decision.mode === "auto") {
+      await transition(db, {
+        postId: created.id,
+        action: "schedule",
+        actor,
+        agentRunId: runId,
+        patch: { scheduledAt: slot },
+      });
+      return {
+        ok: true,
+        postId: created.id,
+        outcome: "scheduled",
+        note: `Autonomy is granted for ${account.connectorId}, so this is scheduled for ${slot.toISOString()}.`,
+      };
+    }
+
+    await transition(db, {
+      postId: created.id,
+      action: "propose",
+      actor,
+      agentRunId: runId,
+    });
+    await announce(
+      toolContext,
+      `Post proposed for @${account.handle}`,
+      created.id,
+      "post",
+    );
+
+    return {
+      ok: true,
+      postId: created.id,
+      outcome: "awaiting_approval",
+      note: decision.downgradeReason
+        ? `Sent for approval (${decision.downgradeReason}).`
+        : "Sent to the approval inbox.",
+    };
+  },
+});
+
+export const schedulePost = createTool({
+  id: "schedule_post",
+  description: "Move an already-approved post into the publishing queue at a given time.",
+  inputSchema: z.object({
+    postId: z.string(),
+    scheduledAt: z.string(),
+  }),
+  execute: async (input, { requestContext }) => {
+    const { db, actor, runId } = readToolContext(requestContext);
+    try {
+      const result = await transition(db, {
+        postId: input.postId,
+        action: "schedule",
+        actor,
+        agentRunId: runId,
+        patch: { scheduledAt: new Date(input.scheduledAt) },
+      });
+      return { ok: true, status: result.to };
+    } catch (error) {
+      return { ok: false, error: (error as Error).message };
+    }
+  },
+});
+
+export const proposeReply = createTool({
+  id: "propose_reply",
+  description:
+    "Draft a reply to an incoming comment or mention. Goes to the approval inbox unless auto-reply has been granted for this kind of comment.",
+  inputSchema: z.object({
+    inboundItemId: z.string(),
+    text: z.string(),
+    reasoning: z.string().describe("Why this reply, and why now"),
+  }),
+  execute: async (input, { requestContext }) => {
+    const toolContext = readToolContext(requestContext);
+    const { db, workspaceId, actor, runId } = toolContext;
+
+    const [inbound] = await db
+      .select({ item: schema.inboundItems, account: schema.linkedAccounts })
+      .from(schema.inboundItems)
+      .innerJoin(
+        schema.linkedAccounts,
+        eq(schema.inboundItems.accountId, schema.linkedAccounts.id),
+      )
+      .where(eq(schema.inboundItems.id, input.inboundItemId));
+    if (!inbound) return { ok: false, error: "Unknown inbound item" };
+
+    const decision = await autonomy.decide(db, {
+      workspaceId,
+      action: "send_reply",
+      connectorId: inbound.account.connectorId,
+      accountId: inbound.account.id,
+      sentiment: inbound.item.sentiment ?? undefined,
+    });
+
+    const [draft] = await db
+      .insert(schema.replyDrafts)
+      .values({
+        workspaceId,
+        inboundItemId: input.inboundItemId,
+        status: decision.mode === "auto" ? "approved" : "pending_approval",
+        content: { text: input.text, media: [] },
+        reasoning: input.reasoning,
+        createdByActor: actor,
+        agentRunId: runId,
+      })
+      .returning();
+    if (!draft) return { ok: false, error: "Could not create the reply draft" };
+
+    await db
+      .update(schema.inboundItems)
+      .set({ status: "triaged" })
+      .where(eq(schema.inboundItems.id, input.inboundItemId));
+
+    if (decision.mode === "auto") {
+      return { ok: true, draftId: draft.id, outcome: "queued_to_send" };
+    }
+
+    await announce(
+      toolContext,
+      `Reply drafted for @${inbound.item.authorHandle}`,
+      draft.id,
+      "reply",
+    );
+    return {
+      ok: true,
+      draftId: draft.id,
+      outcome: "awaiting_approval",
+      note: decision.downgradeReason,
+    };
+  },
+});
+
+export const ignoreInbound = createTool({
+  id: "ignore_inbound",
+  description:
+    "Recommend leaving a comment alone — bait, spam, or nothing useful to add. Records the judgement without replying.",
+  inputSchema: z.object({
+    inboundItemId: z.string(),
+    reason: z.string(),
+  }),
+  execute: async (input, { requestContext }) => {
+    const { db, workspaceId, actor, runId } = readToolContext(requestContext);
+    await db
+      .update(schema.inboundItems)
+      .set({ status: "ignored" })
+      .where(eq(schema.inboundItems.id, input.inboundItemId));
+
+    await db.insert(schema.auditLogs).values({
+      workspaceId,
+      entityType: "inbound_item",
+      entityId: input.inboundItemId,
+      action: "recommend_ignore",
+      actor,
+      diff: { reason: input.reason },
+      agentRunId: runId,
+    });
+    return { ok: true };
+  },
+});
+
+export const updateMemory = createTool({
+  id: "update_memory",
+  description:
+    "Rewrite one of the memory documents (strategy, learnings, brand brief, or an account's voice card). Changes to the brief or a voice card always need human approval — those define who the brand is.",
+  inputSchema: z.object({
+    kind: z.enum(["brand_brief", "strategy", "learnings", "persona"]),
+    contentMd: z.string(),
+    accountId: z
+      .string()
+      .optional()
+      .describe("Required when kind is persona: which account's voice this is"),
+    reason: z.string(),
+  }),
+  execute: async (input, { requestContext }) => {
+    const toolContext = readToolContext(requestContext);
+    const { db, workspaceId, actor, runId } = toolContext;
+
+    if (input.kind === "persona" && !input.accountId) {
+      return { ok: false, error: "A persona update must name the account it belongs to" };
+    }
+
+    const decision = await autonomy.decide(db, {
+      workspaceId,
+      action: "update_memory",
+      accountId: input.accountId,
+    });
+
+    // Identity documents are never rewritten silently, even under autonomy:
+    // an agent quietly editing who the brand is defeats the point of a brief.
+    const identityDoc = input.kind === "brand_brief" || input.kind === "persona";
+
+    if (decision.mode === "auto" && !identityDoc) {
+      const doc = await memory.writeMemory(db, {
+        workspaceId,
+        kind: input.kind,
+        contentMd: input.contentMd,
+        actor,
+        accountId: input.accountId,
+      });
+      return { ok: true, outcome: "saved", version: doc.version };
+    }
+
+    const current = await memory.readMemory(
+      db,
+      workspaceId,
+      input.kind,
+      input.accountId,
+    );
+    const [proposal] = await db
+      .insert(schema.auditLogs)
+      .values({
+        workspaceId,
+        entityType: "memory_proposal",
+        entityId: current?.id ?? workspaceId,
+        action: "propose_memory_update",
+        actor,
+        diff: {
+          kind: input.kind,
+          accountId: input.accountId ?? null,
+          reason: input.reason,
+          before: current?.contentMd ?? null,
+          after: input.contentMd,
+        },
+        agentRunId: runId,
+      })
+      .returning();
+
+    await announce(
+      toolContext,
+      `Proposed an update to ${input.kind.replace("_", " ")}`,
+      proposal?.id ?? workspaceId,
+      "memory",
+    );
+    return {
+      ok: true,
+      outcome: "awaiting_approval",
+      note: identityDoc
+        ? "Identity documents always go through review."
+        : "Sent to the approval inbox.",
+    };
+  },
+});
+
+export const requestAutonomy = createTool({
+  id: "request_autonomy",
+  description:
+    "Ask for permission to perform an action without review from now on. Only worth doing when a run of proposals has been approved unchanged.",
+  inputSchema: z.object({
+    action: z.enum(["schedule_post", "send_reply", "update_memory"]),
+    connectorId: z.string().optional(),
+    rationale: z.string(),
+  }),
+  execute: async (input, { requestContext }) => {
+    const toolContext = readToolContext(requestContext);
+    const { db, workspaceId, actor, runId } = toolContext;
+
+    const stats = await autonomy.trustStats(db, workspaceId, input.action);
+    if (!stats.readyToGraduate) {
+      return {
+        ok: false,
+        note: `Not yet — ${stats.consecutiveCleanApprovals} approvals in a row without edits. Keep going.`,
+      };
+    }
+
+    const [request] = await db
+      .insert(schema.auditLogs)
+      .values({
+        workspaceId,
+        entityType: "autonomy_request",
+        entityId: workspaceId,
+        action: "request_autonomy",
+        actor,
+        diff: {
+          action: input.action,
+          connectorId: input.connectorId ?? null,
+          rationale: input.rationale,
+          consecutiveCleanApprovals: stats.consecutiveCleanApprovals,
+        },
+        agentRunId: runId,
+      })
+      .returning();
+
+    await announce(
+      toolContext,
+      `Requested autonomy for ${input.action}`,
+      request?.id ?? workspaceId,
+      "autonomy_request",
+    );
+    return { ok: true, outcome: "awaiting_approval" };
+  },
+});
+
+export const WRITE_TOOLS = {
+  draft_post: draftPost,
+  propose_post: proposePost,
+  schedule_post: schedulePost,
+  propose_reply: proposeReply,
+  ignore_inbound: ignoreInbound,
+  update_memory: updateMemory,
+  request_autonomy: requestAutonomy,
+};

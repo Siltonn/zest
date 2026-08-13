@@ -29,6 +29,11 @@ export const linkedAccounts = pgTable(
     avatarUrl: text(),
     profileUrl: text(),
     externalId: text(),
+    /**
+     * Where this account lives: the Mastodon instance, the Pomelo API base.
+     * Federated and self-hosted platforms have no single well-known host.
+     */
+    endpoint: text(),
     /** AES-256-GCM ciphertext, never plaintext. */
     accessTokenEnc: text(),
     refreshTokenEnc: text(),

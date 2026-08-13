@@ -1,12 +1,24 @@
 import { Module } from "@nestjs/common";
+import { EventsController } from "./events.controller.js";
 import { HealthController } from "./health.controller.js";
+import { McpController } from "./mcp.controller.js";
+import { PostsController } from "./posts.controller.js";
+import { WorkspaceController } from "./workspace.controller.js";
+import { PomeloController } from "../pomelo/pomelo.controller.js";
 
 /**
- * HTTP surface: REST under /api/v1, plus /mcp, /events and /pomelo as those
- * land. Controllers stay thin — auth guard, zod validation, call into
- * @zest/core, serialize.
+ * The HTTP surface: REST under /api/v1, the MCP endpoint, the live event
+ * stream, and Pomelo's own API. Controllers are thin — guard, validate, call
+ * into @zest/core, serialize.
  */
 @Module({
-  controllers: [HealthController],
+  controllers: [
+    HealthController,
+    PostsController,
+    WorkspaceController,
+    EventsController,
+    McpController,
+    PomeloController,
+  ],
 })
 export class ApiModule {}

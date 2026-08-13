@@ -5,7 +5,11 @@
     "rootDir": "./src",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "strictPropertyInitialization": false
+    "strictPropertyInitialization": false,
+    // `nest build` deletes dist on every run. Combined with incremental builds
+    // tsc would see an up-to-date .tsbuildinfo, skip emitting, and leave dist
+    // empty — a silent no-op build. Not worth the seconds it saves.
+    "incremental": false
   },
   "include": ["src/**/*"]
 }
