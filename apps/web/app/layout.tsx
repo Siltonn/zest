@@ -15,7 +15,7 @@ export const metadata: Metadata = {
  * `.dark`, so without this the page renders light components on whatever
  * background the OS theme implies.
  */
-const themeScript = `(function(){try{var s=localStorage.getItem("zest-theme");var d=s?s==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.classList.add("dark");}catch(e){}})();`;
+const themeScript = `(function(){try{var s=localStorage.getItem("zest-theme");var d=s==="dark"||(!s&&window.matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

@@ -8,6 +8,7 @@ import { useState, type ComponentType, type ReactNode, type SVGProps } from "rea
 import { api, type Workspace } from "@/lib/api";
 import { useLiveEvents } from "@/lib/events";
 import { relativeTime } from "@/lib/format";
+import { UserMenu } from "./user-menu";
 import {
   AccountsIcon,
   AuditIcon,
@@ -198,6 +199,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="space-y-2 px-3 pb-3">
+          <Separator className="opacity-40" />
+          <UserMenu collapsed={collapsed} />
           <Button
             variant="secondary"
             className="w-full"

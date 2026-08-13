@@ -44,6 +44,36 @@ export class WorkspaceController {
     @Inject(REDIS_PUB) private readonly redis: Redis,
   ) {}
 
+  /**
+   * Who the request resolved to. Better Auth's own session endpoint is not
+   * enough: demo mode signs in through the guard rather than a cookie, and an
+   * API key has no user at all. This reports what actually happened.
+   */
+  @Get("me")
+  async me(@Req() req: AuthedRequest) {
+    const [workspace] = await this.db
+      .select({ id: schema.workspaces.id, name: schema.workspaces.name })
+      .from(schema.workspaces)
+      .where(eq(schema.workspaces.id, req.workspaceId));
+
+    if (!req.userId) {
+      // An API or MCP client — real, but not a person.
+      return { user: null, actor: req.actor, workspace };
+    }
+
+    const [user] = await this.db
+      .select({
+        id: schema.users.id,
+        name: schema.users.name,
+        email: schema.users.email,
+        image: schema.users.image,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.id, req.userId));
+
+    return { user: user ?? null, actor: req.actor, workspace };
+  }
+
   @Get("workspace")
   async workspace(@Req() req: AuthedRequest) {
     const [workspace] = await this.db
