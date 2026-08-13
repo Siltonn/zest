@@ -8,6 +8,7 @@ import {
   EmptyState,
   Separator,
   Skeleton,
+  toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -70,16 +71,40 @@ export default function DashboardPage() {
     queryFn: () => api.get<{ report: MemoryDoc | null }>("/memory"),
   });
 
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => api.get<{ capabilities: { llm: boolean } }>("/me"),
+  });
+  const canThink = me?.capabilities.llm ?? true;
+
+  // The agent runs on the queue, so the answer arrives later. Saying so beats
+  // a button that appears to do nothing.
   const plan = useMutation({
     mutationFn: () => api.post("/agent/plan"),
-    onSuccess: () =>
-      setTimeout(() => queryClient.invalidateQueries({ queryKey: ["inbox"] }), 2000),
+    onSuccess: () => {
+      toast.success("Planning run started", {
+        description:
+          "It researches, plans, then writes. Proposals will appear in your inbox.",
+      });
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["inbox"] });
+        void queryClient.invalidateQueries({ queryKey: ["inbox-count"] });
+      }, 4000);
+    },
+    onError: (error: Error) =>
+      toast.danger("Cannot run planning", { description: error.message }),
   });
 
   const analyze = useMutation({
     mutationFn: () => api.post("/agent/analyze", { weekly: true }),
-    onSuccess: () =>
-      setTimeout(() => queryClient.invalidateQueries({ queryKey: ["memory"] }), 3000),
+    onSuccess: () => {
+      toast.success("Writing this week's report", {
+        description: "It will appear here and in Memory when the analyst finishes.",
+      });
+      setTimeout(() => queryClient.invalidateQueries({ queryKey: ["memory"] }), 5000);
+    },
+    onError: (error: Error) =>
+      toast.danger("Cannot write the report", { description: error.message }),
   });
 
   const upcoming = posts
@@ -103,18 +128,37 @@ export default function DashboardPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Segmented value={days} onChange={setDays} options={WINDOWS} />
-          <Button onPress={() => plan.mutate()} isPending={plan.isPending}>
+          <Button
+            onPress={() => plan.mutate()}
+            isPending={plan.isPending}
+            isDisabled={!canThink}
+          >
             Run planning
           </Button>
           <Button
             variant="secondary"
             onPress={() => analyze.mutate()}
             isPending={analyze.isPending}
+            isDisabled={!canThink}
           >
             Weekly report
           </Button>
         </div>
       </header>
+
+      {!canThink && (
+        <Card className="border-l-4 border-l-default-400">
+          <Card.Content className="py-4">
+            <div className="font-medium">The agent cannot think yet</div>
+            <div className="text-sm opacity-60">
+              Publishing, scheduling, the simulated audience and analytics all work
+              without a key. Planning, drafting and reply triage need one — set
+              <code className="mx-1">ANTHROPIC_API_KEY</code> in <code>.env</code> and
+              restart.
+            </div>
+          </Card.Content>
+        </Card>
+      )}
 
       {(inbox?.count ?? 0) > 0 && (
         <Card className="border-l-4 border-l-warning">

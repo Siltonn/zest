@@ -18,7 +18,13 @@ import { and, desc, eq, schema, type Database } from "@zest/db";
 import { analytics, audit, autonomy, memory } from "@zest/core";
 import { getConnector, listConnectorMeta } from "@zest/connectors";
 import { getTokenVault } from "@zest/shared";
-import { advanceClock, ONE_SIM_DAY, readClock } from "@zest/simulator";
+import {
+  advanceClock,
+  ONE_SIM_DAY,
+  readClock,
+  releaseDueEvents,
+} from "@zest/simulator";
+import { hasModelAccess } from "@zest/agent";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
@@ -70,7 +76,14 @@ export class WorkspaceController {
       .from(schema.users)
       .where(eq(schema.users.id, req.userId));
 
-    return { user: user ?? null, actor: req.actor, workspace };
+    return {
+      user: user ?? null,
+      actor: req.actor,
+      workspace,
+      // Lets the UI disable what cannot work and say why, rather than
+      // presenting a button that quietly does nothing.
+      capabilities: { llm: hasModelAccess() },
+    };
   }
 
   @Get("workspace")
@@ -353,14 +366,26 @@ export class WorkspaceController {
 
   @Post("agent/plan")
   async plan(@Req() req: AuthedRequest) {
+    // Queueing work the worker will silently skip is worse than saying no.
+    this.requireModel();
     const job = await this.agentQueue.add("planning", {
       workspaceId: req.workspaceId,
     });
     return { queued: true, jobId: job.id };
   }
 
+  /** The thinking steps need a provider; the platform loop does not. */
+  private requireModel(): void {
+    if (!hasModelAccess()) {
+      throw new BadRequestException(
+        "No LLM provider is configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY and restart to enable planning, drafting and reply triage.",
+      );
+    }
+  }
+
   @Post("agent/analyze")
   async analyze(@Req() req: AuthedRequest, @Body() body: { weekly?: boolean }) {
+    this.requireModel();
     const job = await this.agentQueue.add("analysis", {
       workspaceId: req.workspaceId,
       weekly: body?.weekly ?? false,
@@ -370,6 +395,7 @@ export class WorkspaceController {
 
   @Post("agent/triage")
   async triage(@Req() req: AuthedRequest) {
+    this.requireModel();
     const job = await this.agentQueue.add("triage", {
       workspaceId: req.workspaceId,
     });
@@ -398,8 +424,18 @@ export class WorkspaceController {
   async fastForward(@Req() req: AuthedRequest, @Body() body: { days?: number }) {
     const days = Math.min(Math.max(body?.days ?? 1, 1), 7);
     const clock = await advanceClock(this.db, req.workspaceId, days * ONE_SIM_DAY);
-    await this.simulatorQueue.add("tick", { workspaceId: req.workspaceId });
-    return { simNow: clock.simNow };
+
+    // Released inline so the response can say what actually happened. Waiting
+    // on the queue would mean answering "done" before anything had occurred.
+    const released = await releaseDueEvents(this.db, req.workspaceId, { limit: 500 });
+    await this.ingestQueue.add("poll-engagement", { workspaceId: req.workspaceId });
+
+    const replies = released.filter((e) => e.kind === "reply").length;
+    return {
+      simNow: clock.simNow,
+      released: released.length,
+      replies,
+    };
   }
 
   // ── Notification targets ──────────────────────────────────────────────

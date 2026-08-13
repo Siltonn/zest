@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Separator, Spinner, Tooltip } from "@heroui/react";
+import { Badge, Button, Separator, Spinner, Tooltip, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -104,14 +104,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   });
 
   const fastForward = useMutation({
-    mutationFn: () => api.post("/simulator/fast-forward", { days: 1 }),
-    onSuccess: () => {
-      // The worker needs a moment to release events; refresh once it has.
-      setTimeout(() => {
-        void api.post("/ingest/poll");
-        void queryClient.invalidateQueries();
-      }, 2500);
+    mutationFn: () =>
+      api.post<{ released: number; replies: number }>("/simulator/fast-forward", {
+        days: 1,
+      }),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries();
+      // An action with no visible result has to say what it did, or it reads
+      // as a broken button.
+      toast.success(
+        result.released > 0
+          ? `A day passed on Pomelo — ${result.released} reactions`
+          : "A day passed on Pomelo",
+        {
+          description:
+            result.released > 0
+              ? `${result.replies} of them were replies. Metrics are updating.`
+              : "Nothing was waiting to happen. Publish something first, then fast-forward.",
+        },
+      );
     },
+    onError: (error: Error) =>
+      toast.danger("Could not advance the clock", { description: error.message }),
   });
 
   const section = GROUPS.find((group) =>
@@ -201,15 +215,26 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="space-y-2 px-3 pb-3">
           <Separator className="opacity-40" />
           <UserMenu collapsed={collapsed} />
-          <Button
-            variant="secondary"
-            className="w-full"
-            isPending={fastForward.isPending}
-            onPress={() => fastForward.mutate()}
-          >
-            <ForwardIcon className="size-4" />
-            {!collapsed && "Fast-forward a day"}
-          </Button>
+          <Tooltip delay={300}>
+            <Tooltip.Trigger>
+              <Button
+                variant="secondary"
+                className="w-full"
+                isPending={fastForward.isPending}
+                onPress={() => fastForward.mutate()}
+              >
+                <ForwardIcon className="size-4" />
+                {!collapsed && "Fast-forward a day"}
+              </Button>
+            </Tooltip.Trigger>
+            <Tooltip.Content className="max-w-64">
+              <p className="text-xs leading-relaxed">
+                Advances Pomelo's clock by a day so a published post's audience
+                reacts now instead of over the next 48 hours. Only affects the
+                simulated network — real platforms keep real time.
+              </p>
+            </Tooltip.Content>
+          </Tooltip>
           {!collapsed && (
             <div className="flex items-center gap-1.5 px-1 text-xs opacity-45">
               <span
