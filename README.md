@@ -140,7 +140,9 @@ Design decisions and the arguments behind them are recorded in [`docs/adr/`](doc
 - [004 — Plans and fan-out](docs/adr/004-plans-and-fan-out.md): why cadence belongs to a
   plan rather than a workspace or an account, and what one-run-per-voice buys
 
-There is also an [eight-minute demo script](docs/demo.md).
+There is also an [eight-minute demo script](docs/demo.md), and a
+[code-level comparison against Postiz](docs/competitive-postiz.md) — the largest
+project in the space — with every claim about their code verified by reading it.
 
 ## Drive it from Claude Desktop
 
@@ -217,7 +219,7 @@ Every one of these is "add one file", by design:
 | ✅ | **M7** Agent team | Research once → strategist per plan → writer per account, team view |
 | ✅ | **M8** Content wind tunnel | Pre-publish A/B against the simulated audience, winner promotable |
 
-Next: Threads and X connectors, outbound webhooks, a CLI, and draft comments so an agent and
+Next: composer agent assist, thread support, evergreen recycling, outbound webhooks, Threads and X connectors, a CLI, and draft comments so an agent and
 a human can discuss a post before it ships.
 
 ## License
