@@ -71,3 +71,16 @@ test("the UI can enumerate what a reviewer may do next", () => {
   ]);
   assert.deepEqual(availableActions("published"), []);
 });
+
+test("a scheduled post can be moved to another time", () => {
+  // Calendar drag and "publish now" both re-schedule an already-scheduled post;
+  // refusing this made both controls dead in the only state they are offered.
+  assert.equal(nextStatus("schedule", "scheduled"), "scheduled");
+});
+
+test("rescheduling still cannot reach into publishing", () => {
+  // The claim is the boundary: once the publisher owns the row, moving it is a
+  // race, not a reschedule.
+  assert.equal(canTransition("schedule", "publishing"), false);
+  assert.equal(canTransition("schedule", "published"), false);
+});

@@ -1,4 +1,4 @@
-import { eq, schema, type Database } from "@zest/db";
+import { and, eq, lt, schema, type Database } from "@zest/db";
 import { emit, type EventPublisher } from "@zest/core";
 import type { RoleName } from "./agents.ts";
 
@@ -122,18 +122,90 @@ export async function readRun(
  * Normalises whatever the model returned into a transcript we can replay in the
  * UI: which tools ran, with what arguments, and what came back.
  */
+/**
+ * Mastra wraps each tool call as `{ type, runId, from, payload: { toolName, args } }`
+ * rather than exposing `toolName` at the top level. Reading the flat shape
+ * silently produced `undefined` for every name, which meant blank chips on the
+ * team page and a transcript that could not answer "what did it actually do" —
+ * the one question the transcript exists for. Both shapes are read so a future
+ * SDK change flattening this does not break it again.
+ */
+type RawToolEntry = {
+  toolName?: string;
+  args?: unknown;
+  result?: unknown;
+  payload?: { toolName?: string; args?: unknown; result?: unknown };
+};
+
+function readTool(entry: RawToolEntry): { tool?: string; args?: unknown; result?: unknown } {
+  return {
+    tool: entry.payload?.toolName ?? entry.toolName,
+    args: entry.payload?.args ?? entry.args,
+    result: entry.payload?.result ?? entry.result,
+  };
+}
+
 export function toTranscript(steps: unknown): unknown[] {
   if (!Array.isArray(steps)) return [];
   return steps.map((step) => {
     const s = step as {
       text?: string;
-      toolCalls?: { toolName?: string; args?: unknown }[];
-      toolResults?: { toolName?: string; result?: unknown }[];
+      finishReason?: string;
+      toolCalls?: RawToolEntry[];
+      toolResults?: RawToolEntry[];
     };
     return {
       text: s.text,
-      toolCalls: s.toolCalls?.map((c) => ({ tool: c.toolName, args: c.args })),
-      toolResults: s.toolResults?.map((r) => ({ tool: r.toolName, result: r.result })),
+      // Recorded because "why did it stop" is the first question when a stage
+      // succeeds and produces nothing: `length` means it ran out of room.
+      finishReason: s.finishReason,
+      toolCalls: s.toolCalls?.map((c) => {
+        const { tool, args } = readTool(c);
+        return { tool, args };
+      }),
+      toolResults: s.toolResults?.map((r) => {
+        const { tool, result } = readTool(r);
+        return { tool, result };
+      }),
     };
   });
+}
+
+/**
+ * How long a run may sit in `running` before it is presumed dead.
+ *
+ * A full planning stage is minutes, not tens of minutes. Generous enough that a
+ * slow model is not declared dead mid-thought, short enough that a killed
+ * worker does not leave a spinner on the team page forever.
+ */
+const STALE_RUN_MINUTES = 20;
+
+/**
+ * Fails runs whose process went away.
+ *
+ * Nothing times out `agent.generate`, and a worker killed mid-run leaves its
+ * row in `running` permanently: the team page spins, the dashboard counts it as
+ * live, and no retry ever happens because the job is already gone. The
+ * publishing path has recovered orphaned claims since M2 for the same reason —
+ * this is that sweep for agent runs.
+ */
+export async function reapStaleRuns(db: Database): Promise<number> {
+  const cutoff = new Date(Date.now() - STALE_RUN_MINUTES * 60_000);
+
+  const reaped = await db
+    .update(schema.agentRuns)
+    .set({
+      status: "failed",
+      endedAt: new Date(),
+      errorMessage: `No result after ${STALE_RUN_MINUTES} minutes — the run was abandoned.`,
+    })
+    .where(
+      and(
+        eq(schema.agentRuns.status, "running"),
+        lt(schema.agentRuns.startedAt, cutoff),
+      ),
+    )
+    .returning({ id: schema.agentRuns.id });
+
+  return reaped.length;
 }

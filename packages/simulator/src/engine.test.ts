@@ -222,3 +222,79 @@ test("a compliment wrapping a challenge counts as pushback", () => {
   assert.equal(classifySentiment("Love the idea, however I'm unconvinced"), "negative");
   assert.equal(classifySentiment("Great write-up — though I've been burned before"), "negative");
 });
+
+test("a post with real reach always draws at least one reply", () => {
+  // The reply queue is the half of the loop this simulator exists to show.
+  // Measured before this floor, 48% of posts drew nothing at all — faithful to
+  // a real network, and useless for demonstrating triage.
+  let silent = 0;
+
+  for (let i = 0; i < 40; i++) {
+    const plan = planEngagement({
+      postId: `reach-${i}`,
+      text: "What breaks in local-first setups? Disk corruption and clock drift.",
+      publishedAt: new Date("2026-08-14T14:00:00Z"),
+      personas: AUDIENCE,
+      authorFollowers: 1200,
+    });
+    if (plan.reach >= 8 && !plan.events.some((e) => e.kind === "reply")) silent++;
+  }
+
+  assert.equal(silent, 0, "a post that reached people should never be met with silence");
+});
+
+test("a post almost nobody saw is left silent", () => {
+  // The floor is a floor, not a guarantee of conversation: manufacturing a
+  // reply to a post with no reach would be the fake version of this.
+  const plan = planEngagement({
+    postId: "tiny-reach",
+    text: "hm",
+    publishedAt: new Date("2026-08-14T03:00:00Z"),
+    personas: AUDIENCE.slice(0, 2),
+    authorFollowers: 10,
+  });
+
+  if (plan.reach < 8) {
+    assert.equal(
+      plan.events.some((e) => e.kind === "reply"),
+      false,
+      "no reach means no manufactured conversation",
+    );
+  }
+});
+
+test("a question is not pushback, even when it contains 'but'", () => {
+  // Straight from a real generated reply. Reading this as negative is how a
+  // genuine question gets handled defensively instead of answered.
+  assert.equal(
+    classifySentiment(
+      "That's an interesting trade-off, but how do you think the cost of increased on-call workload compares to maintaining the old service?",
+    ),
+    "neutral",
+  );
+  assert.equal(
+    classifySentiment("Nice work. Does this handle clock drift, or is that out of scope?"),
+    "neutral",
+  );
+});
+
+test("sarcasm reads as pushback even with no negative words in it", () => {
+  // Also from a real reply: no "but", no "doubt", entirely hostile in tone.
+  assert.equal(
+    classifySentiment(
+      "Yeah, because skipping locks is a well-known tradeoff. Did you actually expect throughput to stay the same?",
+    ),
+    "negative",
+  );
+});
+
+test("a compliment carrying a challenge is still pushback", () => {
+  // The original case this heuristic existed for; it must not regress.
+  assert.equal(classifySentiment("Nice, but what's the catch?"), "negative");
+  assert.equal(classifySentiment("Looks great, though I'm unconvinced."), "negative");
+});
+
+test("plain praise and plain abuse are unchanged", () => {
+  assert.equal(classifySentiment("This is brilliant, saved me hours."), "positive");
+  assert.equal(classifySentiment("This is garbage."), "hostile");
+});

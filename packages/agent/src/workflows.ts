@@ -32,11 +32,20 @@ export type RunOptions = {
 
 type RoleResult = { text: string; transcript: unknown[] };
 
+/**
+ * `scope` carries the plan and account a stage is bound to.
+ *
+ * These have to reach the tool context or `add_plan_items` cannot tell which
+ * programme it is writing for, and refuses every call with "this run is not
+ * attached to a plan" — which the model then retries and the stage still
+ * reports success, having produced nothing.
+ */
 async function runRole(
   options: RunOptions,
   role: RoleName,
   prompt: string,
   runId: string,
+  scope: { planId?: string; accountId?: string } = {},
 ): Promise<RoleResult> {
   const agent = createRoleAgent(role, options.model);
   const result = await agent.generate(prompt, {
@@ -46,6 +55,7 @@ async function runRole(
       actor: agentActor(runId, role),
       runId,
       publisher: options.publisher,
+      ...scope,
     }),
     maxSteps: 18,
   });
@@ -196,18 +206,30 @@ export async function runStrategy(
       .join("\n\n");
 
     const before = found.items.length;
-    const result = await runRole(options, "strategist", brief, handle.id);
+    const result = await runRole(options, "strategist", brief, handle.id, { planId });
     const after = await plans.readPlan(db, workspaceId, planId);
+
+    const added = (after?.items.length ?? before) - before;
+
+    // A strategist that returns prose and no items has failed, however
+    // articulate the prose was: the copywriter fan-out reads rows, so the cycle
+    // ends here with nothing to show and no reason recorded. Say so on the run.
+    if (added === 0) {
+      const reason =
+        "The strategist finished without recording any plan items — nothing to write.";
+      await finishRun(db, handle, {
+        transcript: result.transcript,
+        output: result.text,
+        error: reason,
+      });
+      return { runId: handle.id, plan: result.text, items: 0, skipped: reason };
+    }
 
     await finishRun(db, handle, {
       transcript: result.transcript,
       output: result.text,
     });
-    return {
-      runId: handle.id,
-      plan: result.text,
-      items: (after?.items.length ?? before) - before,
-    };
+    return { runId: handle.id, plan: result.text, items: added };
   } catch (error) {
     await finishRun(db, handle, { error: (error as Error).message });
     throw error;
@@ -271,7 +293,10 @@ export async function runCopy(
     ].join("\n\n");
 
     const before = await countProposals(db, workspaceId);
-    const result = await runRole(options, "copywriter", brief, handle.id);
+    const result = await runRole(options, "copywriter", brief, handle.id, {
+      planId,
+      accountId,
+    });
     const after = await countProposals(db, workspaceId);
 
     await finishRun(db, handle, {
@@ -308,21 +333,48 @@ export type TriageResult = {
 export async function runReplyTriage(options: RunOptions): Promise<TriageResult> {
   const { db, workspaceId } = options;
 
+  if (!hasModelAccess()) {
+    return { runId: "", handled: 0, skipped: new NoModelConfiguredError().message };
+  }
+
+  /**
+   * Claim the comments before drafting anything.
+   *
+   * Triage fires from two places — the ingest processor when new comments
+   * arrive, and the operator pressing the button — so two runs overlap easily.
+   * Reading the `new` rows and marking them later meant both runs saw the same
+   * comments and both drafted: measured, every one of seven comments came back
+   * with two replies waiting in the inbox.
+   *
+   * The same conditional UPDATE the publisher uses to claim a due post: the
+   * status flip is the claim, and a losing run gets an empty set and stops. In
+   * the database, not the queue, for the same reason as publishing.
+   */
   const pending = await db
-    .select()
-    .from(schema.inboundItems)
+    .update(schema.inboundItems)
+    .set({ status: "triaged" })
     .where(
       and(
         eq(schema.inboundItems.workspaceId, workspaceId),
         eq(schema.inboundItems.status, "new"),
+        inArray(
+          schema.inboundItems.id,
+          db
+            .select({ id: schema.inboundItems.id })
+            .from(schema.inboundItems)
+            .where(
+              and(
+                eq(schema.inboundItems.workspaceId, workspaceId),
+                eq(schema.inboundItems.status, "new"),
+              ),
+            )
+            .limit(15),
+        ),
       ),
     )
-    .limit(15);
+    .returning();
 
   if (pending.length === 0) return { runId: "", handled: 0 };
-  if (!hasModelAccess()) {
-    return { runId: "", handled: 0, skipped: new NoModelConfiguredError().message };
-  }
 
   const handle = await startRun(db, {
     workspaceId,
@@ -353,6 +405,22 @@ export async function runReplyTriage(options: RunOptions): Promise<TriageResult>
     await finishRun(db, handle, { transcript: result.transcript });
     return { runId: handle.id, handled: pending.length };
   } catch (error) {
+    // Give the claim back. A crashed run holding six comments in `triaged`
+    // with nothing drafted is worse than a duplicate: they stop showing as
+    // unanswered and nobody ever sees them again.
+    await db
+      .update(schema.inboundItems)
+      .set({ status: "new" })
+      .where(
+        and(
+          inArray(
+            schema.inboundItems.id,
+            pending.map((item) => item.id),
+          ),
+          eq(schema.inboundItems.status, "triaged"),
+        ),
+      );
+
     await finishRun(db, handle, { error: (error as Error).message });
     throw error;
   }
@@ -554,7 +622,9 @@ export async function runRework(
       "no preamble, no explanation, no quotes around it.",
     ].join("\n\n");
 
-    const result = await runRole(options, "copywriter", brief, handle.id);
+    const result = await runRole(options, "copywriter", brief, handle.id, {
+      accountId: row.account.id,
+    });
     const revised = result.text.trim();
 
     if (!revised) {

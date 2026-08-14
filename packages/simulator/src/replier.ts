@@ -108,6 +108,23 @@ export async function composeReply(
  * Classifies a reply so the agent's triage step has something to act on, and
  * so autonomy rules like "auto-answer positive comments only" can work.
  */
+/**
+ * Triage sentiment.
+ *
+ * This drives real behaviour: an auto-reply rule can be scoped to friendly
+ * comments, so mislabelling decides whether a skeptic gets a cheerful
+ * thank-you. Two failures showed up against real generated replies —
+ *
+ *   "That's an interesting trade-off, but how do you think the cost compares?"
+ *      → read as negative, because of one "but". It is a question.
+ *   "Yeah, because skipping locks is a well-known tradeoff. Did you actually
+ *    expect throughput to stay the same?"
+ *      → read as neutral, because sarcasm uses no negative words at all.
+ *
+ * So a soft contrast only counts as pushback when the message is not primarily
+ * a question, and the sarcastic openers that carry real hostility are matched
+ * directly.
+ */
 export function classifySentiment(
   text: string,
 ): "positive" | "neutral" | "negative" | "hostile" {
@@ -115,17 +132,36 @@ export function classifySentiment(
 
   if (/\b(garbage|useless|scam|shut up|idiot|stupid)\b/.test(lower)) return "hostile";
 
-  // Pushback is checked before praise on purpose. "Nice, but what's the catch?"
-  // is a challenge wearing a compliment, and reading it as praise would let an
-  // auto-reply rule answer a skeptic with a thank-you.
-  if (
-    /\b(but|however|catch|burned|doubt|doubtful|skeptic|skeptical|overhyped|disagree|unconvinced)\b/.test(
+  // Sarcasm wearing a neutral vocabulary. Rhetorical, not curious.
+  const sarcastic =
+    /\byeah,?\s+(because|sure|right)\b/.test(lower) ||
+    /\bdid you (actually|really|seriously)\b/.test(lower) ||
+    /\b(oh|wow),?\s+(great|cool|amazing)\b/.test(lower);
+
+  // Unambiguous pushback: the words mean doubt regardless of punctuation.
+  const strongPushback =
+    /\b(catch|burned|doubt|doubtful|skeptic|skeptical|overhyped|disagree|unconvinced|nonsense|hype)\b/.test(
       lower,
-    ) ||
-    /\breally\?/.test(lower)
-  ) {
-    return "negative";
-  }
+    ) || /\breally\?/.test(lower);
+
+  // A message whose weight is a question. "X, but how does Y work?" is someone
+  // asking, and answering it defensively is the failure this avoids.
+  const asksSomething =
+    /\?/.test(text) &&
+    /\b(how|what|why|when|where|which|who|does|do|is|are|can|could|would|any)\b/.test(
+      lower,
+    );
+
+  const softContrast = /\b(but|however|though)\b/.test(lower);
+
+  if (sarcastic || strongPushback) return "negative";
+  if (softContrast && !asksSomething) return "negative";
+
+  // Praise does not promote a question. "Nice work — does this handle clock
+  // drift?" is friendly and still needs an actual answer, and `positive` is the
+  // bucket an auto-reply rule is most likely to be pointed at. Leaving it
+  // neutral means the question reaches someone who will answer it.
+  if (asksSomething) return "neutral";
 
   if (
     /\b(love|great|excellent|exactly|brilliant|useful|saved|awesome|nice)\b/.test(lower)

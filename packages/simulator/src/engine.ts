@@ -185,7 +185,7 @@ export function planEngagement(input: PlanInput): EngagementPlan {
         offsetMs: base + random() * 45 * 60_000,
       });
     }
-    if (random() < engagement * 0.45 * replyBias(persona)) {
+    if (random() < engagement * 0.8 * replyBias(persona)) {
       events.push({
         kind: "reply",
         actorId: persona.id,
@@ -201,9 +201,44 @@ export function planEngagement(input: PlanInput): EngagementPlan {
     }
   }
 
+  // A floor, not a fudge.
+  //
+  // Measured across 120 simulated posts, 48% drew no reply at all — faithful to
+  // a real network and useless here, because the reply queue is the half of the
+  // loop this simulator exists to demonstrate. A post that genuinely reached a
+  // couple of dozen people and drew nothing back leaves the triage stage with
+  // nothing to triage and the demo with nothing to show.
+  //
+  // So when a post got real reach and still nobody spoke, the persona most
+  // inclined to reply does. Picking the highest reply bias among those who
+  // actually saw it keeps it in character — the curious one asks, the lurker
+  // stays quiet — rather than making everyone chatty.
+  if (reach >= MIN_REACH_FOR_GUARANTEED_REPLY && !events.some((e) => e.kind === "reply")) {
+    const sawIt = new Set(
+      events.filter((e) => e.kind === "impression").map((e) => e.actorId),
+    );
+    const talker = input.personas
+      .filter((p) => sawIt.has(p.id))
+      .sort((a, b) => replyBias(b) - replyBias(a))[0];
+
+    if (talker) {
+      events.push({
+        kind: "reply",
+        actorId: talker.id,
+        offsetMs: decayOffset(random) + random() * 90 * 60_000,
+      });
+    }
+  }
+
   events.sort((a, b) => a.offsetMs - b.offsetMs);
   return { events, quality, reach, viral };
 }
+
+/**
+ * Below this the silence is the honest answer: a post almost nobody saw should
+ * not manufacture a conversation.
+ */
+const MIN_REACH_FOR_GUARANTEED_REPLY = 8;
 
 /** Question askers and skeptics talk; lurkers almost never do. */
 function replyBias(persona: SimPersona): number {

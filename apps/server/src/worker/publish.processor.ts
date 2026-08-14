@@ -14,6 +14,7 @@ import {
 } from "@zest/core";
 import { getConnector } from "@zest/connectors";
 import { system } from "@zest/shared";
+import { reapStaleRuns } from "@zest/agent";
 import { DATABASE } from "../infra/database.module.js";
 import { REDIS_PUB } from "../infra/redis.module.js";
 import { NOTIFIER } from "../infra/notifier.module.js";
@@ -210,8 +211,13 @@ export class PublishProcessor extends WorkerHost {
   private async reconcile(): Promise<{
     recovered: number;
     expired: number;
+    abandonedRuns: number;
   }> {
     const recovered = await recoverStalePublishing(this.db);
+
+    // A worker killed mid-run leaves its row in `running` forever: the team
+    // page spins and nothing retries. Same sweep, one layer up.
+    const abandonedRuns = await reapStaleRuns(this.db);
 
     const stale = await expireStaleProposals(this.db);
     for (const postId of stale) {
@@ -222,11 +228,11 @@ export class PublishProcessor extends WorkerHost {
       });
     }
 
-    if (recovered > 0 || stale.length > 0) {
+    if (recovered > 0 || stale.length > 0 || abandonedRuns > 0) {
       this.logger.log(
-        `Reconciled: ${recovered} recovered from publishing, ${stale.length} proposals expired`,
+        `Reconciled: ${recovered} recovered from publishing, ${stale.length} proposals expired, ${abandonedRuns} abandoned runs failed`,
       );
     }
-    return { recovered, expired: stale.length };
+    return { recovered, expired: stale.length, abandonedRuns };
   }
 }

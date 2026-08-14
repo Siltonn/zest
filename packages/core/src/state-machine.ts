@@ -36,7 +36,15 @@ const TRANSITIONS: Record<TransitionAction, Rule> = {
   reject: { from: ["pending_approval", "needs_changes"], to: "rejected" },
   // An edit on a post awaiting rework puts it back in front of the reviewer.
   edit: { from: ["needs_changes", "draft"], to: "pending_approval" },
-  schedule: { from: ["draft", "approved", "failed", "expired"], to: "scheduled" },
+  // `scheduled` is included so a scheduled post can be moved to another time or
+  // pushed out now. Dragging on the calendar and "publish now" both do exactly
+  // that, and both silently failed while the state machine refused it. Safe
+  // because rescheduling only touches `scheduledAt`: if the publisher has
+  // already claimed the row the status is `publishing` and this correctly fails.
+  schedule: {
+    from: ["draft", "approved", "scheduled", "failed", "expired"],
+    to: "scheduled",
+  },
   claim: { from: ["scheduled"], to: "publishing" },
   publish_succeeded: { from: ["publishing"], to: "published" },
   publish_failed: { from: ["publishing"], to: "failed" },
