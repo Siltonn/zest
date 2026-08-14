@@ -222,7 +222,7 @@ export class PlansController {
   async run(@Req() req: AuthedRequest, @Param("id") id: string) {
     if (!hasModelAccess()) {
       throw new BadRequestException(
-        "No LLM provider is configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY and restart to enable planning, drafting and reply triage.",
+        "No LLM provider is configured. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY and restart to enable planning, drafting and reply triage.",
       );
     }
     const found = await plans.readPlan(this.db, req.workspaceId, id);

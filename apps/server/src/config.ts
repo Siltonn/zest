@@ -26,6 +26,13 @@ const envSchema = z.object({
     .transform((v) => v === "true" || v === "1"),
   MAIL_PROVIDER: z.enum(["resend", "smtp", "console"]).default("console"),
   RESEND_API_KEY: z.string().optional(),
+  // One key, every model, and a spend cap — the easiest way to try Zest
+  // without opening an account with a model vendor. Checked before the others.
+  OPENROUTER_API_KEY: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  /** Overrides the default model; on OpenRouter use a `vendor/model` slug. */
+  ZEST_MODEL: z.string().optional(),
   // Defaults point at the Mailpit container in docker-compose, so the demo
   // delivers real mail to a real inbox with nothing to configure.
   SMTP_HOST: z.string().default("localhost"),
@@ -33,8 +40,6 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   MAIL_FROM: z.string().default("Zest <zest@localhost>"),
-  ANTHROPIC_API_KEY: z.string().optional(),
-  OPENAI_API_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

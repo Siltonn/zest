@@ -95,3 +95,24 @@ Approval is never expressed as a workflow suspend.
   not the product.
 - Agent runs are recorded in the `agent_runs` table with full transcripts, so run replay in
   the UI does not depend on the framework's tracing backend.
+
+## Addendum — provider selection
+
+Three keys are accepted, checked in order: `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`,
+`OPENAI_API_KEY`. OpenRouter goes first because it is what someone reaches for to try a
+project without opening an account with a model vendor — one key, every model, a spend cap.
+
+It needs no new dependency: OpenRouter is OpenAI-compatible, so `createOpenAI` with a
+`baseURL` covers it. Two details are easy to get wrong and both fail confusingly:
+
+- **Use `.chat()`, not the default call.** The AI SDK's OpenAI provider defaults to the
+  Responses API, which OpenRouter does not implement. The symptom is a 404 that looks like
+  a missing model rather than a wrong endpoint.
+- **Model ids are namespaced.** `claude-sonnet-5` does not resolve; `anthropic/claude-sonnet-5`
+  does. The two built-in defaults are mapped, and anything already containing a `/` is
+  passed through as the operator's choice.
+
+One more thing worth writing down because it wastes an afternoon: OpenRouter answers a
+*malformed* key with `Missing Authentication header`, which reads like the header never
+arrived. A well-formed but unknown key says `User not found.` If you see the first, check
+the key's shape before you go looking for a transport bug.

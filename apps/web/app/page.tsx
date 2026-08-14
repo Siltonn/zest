@@ -74,7 +74,10 @@ export default function DashboardPage() {
 
   const { data: me } = useQuery({
     queryKey: ["me"],
-    queryFn: () => api.get<{ capabilities?: { llm: boolean } }>("/me"),
+    queryFn: () =>
+      api.get<{
+        capabilities?: { llm: boolean; provider?: string; model?: string | null };
+      }>("/me"),
   });
   // Assume it can until told otherwise, so a slow or older API never disables
   // the controls it is meant to explain.
@@ -150,10 +153,12 @@ export default function DashboardPage() {
             <div className="font-medium">The agent cannot think yet</div>
             <div className="mt-0.5 text-sm opacity-60">
               Publishing, scheduling, the simulated audience and analytics all work
-              without a key. Planning, drafting and reply triage need one.
+              without a key. Planning, drafting and reply triage need one. Any of the
+              three works — OpenRouter reaches every model with one key and a spend
+              cap, which is the quickest way to try it.
             </div>
             <pre className="mt-2 overflow-x-auto rounded-lg bg-default-100 px-3 py-2 text-xs">
-              {"# .env\nANTHROPIC_API_KEY=sk-ant-…\n\ndocker compose restart server"}
+              {"# .env\nOPENROUTER_API_KEY=sk-or-…\n# or ANTHROPIC_API_KEY / OPENAI_API_KEY\n\ndocker compose restart server"}
             </pre>
           </Card.Content>
         </Card>

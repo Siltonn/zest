@@ -24,7 +24,7 @@ import {
   readClock,
   releaseDueEvents,
 } from "@zest/simulator";
-import { hasModelAccess } from "@zest/agent";
+import { activeProvider, hasModelAccess } from "@zest/agent";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
@@ -81,7 +81,14 @@ export class WorkspaceController {
       workspace,
       // Lets the UI disable what cannot work and say why, rather than
       // presenting a button that quietly does nothing.
-      capabilities: { llm: hasModelAccess() },
+      // Naming the provider beats a bare boolean: "it can think" and "it is
+      // thinking through OpenRouter with this model" are different answers when
+      // something comes back wrong.
+      capabilities: {
+        llm: hasModelAccess(),
+        provider: activeProvider(),
+        model: process.env.ZEST_MODEL ?? null,
+      },
     };
   }
 
@@ -394,7 +401,7 @@ export class WorkspaceController {
   private requireModel(): void {
     if (!hasModelAccess()) {
       throw new BadRequestException(
-        "No LLM provider is configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY and restart to enable planning, drafting and reply triage.",
+        "No LLM provider is configured. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY and restart to enable planning, drafting and reply triage.",
       );
     }
   }

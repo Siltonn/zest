@@ -29,7 +29,8 @@ curl -s -H "Authorization: Bearer $ZEST_API_KEY" "$ZEST_URL/api/v1/inbox"
 
 If a call returns 401 the key is wrong or missing; if it returns 400 with a message about
 an LLM provider, the instance has no model configured and the thinking steps are off —
-the platform loop (scheduling, publishing, replying by hand) still works.
+the platform loop (scheduling, publishing, replying by hand) still works. Tell the user
+they can set `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` and restart.
 
 ## The mental model
 

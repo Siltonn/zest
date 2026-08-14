@@ -43,6 +43,14 @@ export default function SettingsPage() {
     queryFn: () => api.get<Workspace>("/workspace"),
   });
 
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: () =>
+      api.get<{
+        capabilities?: { llm: boolean; provider?: string; model?: string | null };
+      }>("/me"),
+  });
+
   const { data: notifications = [] } = useQuery({
     queryKey: ["notifications"],
     queryFn: () => api.get<NotificationTarget[]>("/notifications"),
@@ -183,6 +191,34 @@ export default function SettingsPage() {
               Add
             </Button>
           </div>
+        </Card.Content>
+      </Card>
+
+      <Card>
+        <Card.Header>
+          <Card.Title className="text-base">Model provider</Card.Title>
+          <p className="text-xs opacity-50">
+            Which provider the thinking steps actually run through. Set by
+            environment, not here — a key belongs in the deployment, not the database.
+          </p>
+        </Card.Header>
+        <Card.Content>
+          {me?.capabilities?.llm ? (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Chip size="sm" variant="soft" color="success">
+                {me.capabilities.provider ?? "configured"}
+              </Chip>
+              <span className="opacity-60">
+                {me.capabilities.model ?? "using the built-in default model"}
+              </span>
+            </div>
+          ) : (
+            <p className="text-sm opacity-60">
+              None configured. Set <code>OPENROUTER_API_KEY</code>,{" "}
+              <code>ANTHROPIC_API_KEY</code> or <code>OPENAI_API_KEY</code> and restart.
+              The platform loop works without one.
+            </p>
+          )}
         </Card.Content>
       </Card>
 

@@ -42,8 +42,18 @@ docker compose up
 Then open <http://localhost:3000>.
 
 Without an LLM key the full platform loop still works — compose, schedule, publish,
-simulated engagement, analytics, and answering comments by hand. Add `ANTHROPIC_API_KEY`
-to `.env` to switch on planning, drafting, reply triage and analysis.
+simulated engagement, analytics, and answering comments by hand. Add one key to `.env` to
+switch on planning, drafting, reply triage and analysis:
+
+```bash
+OPENROUTER_API_KEY=sk-or-v1-…    # one key, every model, and a spend cap
+# or ANTHROPIC_API_KEY / OPENAI_API_KEY — whichever is present wins, in that order
+```
+
+OpenRouter is the quickest way to try it, and `ZEST_MODEL` picks the model
+(`anthropic/claude-sonnet-5`, `openai/gpt-4o`, anything it routes). The two built-in
+defaults are mapped to their OpenRouter slugs automatically, so you only need to set it to
+choose something else. Settings shows which provider is actually answering.
 
 ### Your first ten minutes
 
