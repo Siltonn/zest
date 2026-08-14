@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, Card, Chip, Spinner, TextArea } from "@heroui/react";
+import { Button, Card, Chip, Spinner, TextArea, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useRef, useState, type ChangeEvent } from "react";
@@ -34,6 +34,27 @@ export default function ComposePage() {
   const limit = account?.platform?.charLimit ?? 280;
   const length = [...text].length;
   const over = length > limit;
+
+  // Keeps one step of undo: polish replaces the draft wholesale, and "that was
+  // worse" needs a way back that does not depend on the browser's undo stack.
+  const [beforePolish, setBeforePolish] = useState<string | null>(null);
+
+  const polish = useMutation({
+    mutationFn: () =>
+      api.post<{ text: string }>("/compose/polish", {
+        accountId: account?.id,
+        text,
+      }),
+    onSuccess: (result) => {
+      setBeforePolish(text);
+      setText(result.text);
+      toast.success(`Polished against @${account?.handle}'s voice`, {
+        description: "Your point, their voice. Undo below if it lost something.",
+      });
+    },
+    onError: (error: Error) =>
+      toast.danger("Could not polish it", { description: error.message }),
+  });
 
   const create = useMutation({
     mutationFn: () =>
@@ -82,6 +103,33 @@ export default function ComposePage() {
             rows={7}
             placeholder={`What should @${account?.handle ?? "…"} say?`}
           />
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onPress={() => polish.mutate()}
+              isPending={polish.isPending}
+              isDisabled={!text.trim() || !account}
+            >
+              Polish with the agent
+            </Button>
+            {beforePolish !== null && (
+              <Button
+                size="sm"
+                variant="tertiary"
+                onPress={() => {
+                  setText(beforePolish);
+                  setBeforePolish(null);
+                }}
+              >
+                Undo polish
+              </Button>
+            )}
+            <span className="text-xs opacity-45">
+              Rewrites your draft in this account's voice — your point stays yours.
+            </span>
+          </div>
+
           {media.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {media.map((item, index) => (

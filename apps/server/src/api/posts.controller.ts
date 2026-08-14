@@ -16,7 +16,7 @@ import type { Queue } from "bullmq";
 import { and, desc, eq, schema, type Database } from "@zest/db";
 import { approvals, audit, changeRequests, transition } from "@zest/core";
 import { getConnector, listConnectorMeta } from "@zest/connectors";
-import { hasModelAccess } from "@zest/agent";
+import { hasModelAccess, polishDraft } from "@zest/agent";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
 import { QUEUE_AGENT_RUN, QUEUE_PUBLISH } from "../queue/queue.constants.js";
@@ -247,6 +247,32 @@ export class PostsController {
       patch: { scheduledAt: new Date(), errorMessage: null },
     });
     return { status: result.to };
+  }
+
+  /**
+   * Polish a hand-written draft against the account's voice card. Inline
+   * rather than queued — the operator is sitting in the composer waiting.
+   */
+  @HttpPost("compose/polish")
+  async polish(@Req() req: AuthedRequest, @Body() body: unknown) {
+    const input = z
+      .object({ accountId: z.string().uuid(), text: z.string().min(1) })
+      .parse(body);
+
+    if (!hasModelAccess()) {
+      throw new BadRequestException(
+        "No LLM provider is configured. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY and restart to enable polish.",
+      );
+    }
+
+    const result = await polishDraft({
+      db: this.db,
+      workspaceId: req.workspaceId,
+      accountId: input.accountId,
+      text: input.text,
+    });
+    if (result.skipped) throw new BadRequestException(result.skipped);
+    return { text: result.text, runId: result.runId };
   }
 
   @Get("inbox")
