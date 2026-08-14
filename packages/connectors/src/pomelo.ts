@@ -26,7 +26,7 @@ const meta: ConnectorMeta = {
   color: "#f0803c",
   charLimit: 420,
   maxImages: 4,
-  features: ["replies", "images", "dm"],
+  features: ["replies", "images", "threads", "dm"],
   setupHint: "Built in — connects instantly, no credentials needed.",
 };
 

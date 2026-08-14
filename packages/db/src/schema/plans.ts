@@ -6,7 +6,7 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
-import { planItemStatusEnum, planStatusEnum } from "./enums.ts";
+import { planItemStatusEnum, planKindEnum, planStatusEnum } from "./enums.ts";
 import { workspaces } from "./workspace.ts";
 import { linkedAccounts, posts } from "./publishing.ts";
 
@@ -29,6 +29,12 @@ export const plans = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     name: text().notNull(),
+    /**
+     * `fresh` runs the research → strategist → copywriter pipeline. `evergreen`
+     * re-proposes the best of what this plan's accounts already published — a
+     * deterministic pick, so it needs no model and works in the zero-key demo.
+     */
+    kind: planKindEnum().notNull().default("fresh"),
     /** What this programme is for, in the operator's words. Fed to the strategist. */
     objective: text(),
     /** A named cadence (daily/weekdays/weekly/manual) or a raw cron expression. */

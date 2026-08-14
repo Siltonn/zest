@@ -34,6 +34,16 @@ export const mediaRefSchema = z.object({
 export const postContentSchema = z.object({
   text: z.string(),
   media: z.array(mediaRefSchema).default([]),
+  /**
+   * Follow-up parts of a thread, text-only for now.
+   *
+   * A thread is one domain object, not N linked posts: one approval, one
+   * calendar entry, one publish claim. Splitting it into rows would make the
+   * operator approve five things to say one thing, and the double-post claim
+   * would have to span all of them. The chain is a publishing detail — part one
+   * goes out with `publish()`, the rest with `reply()` to the previous part.
+   */
+  thread: z.array(z.string().min(1)).optional(),
 });
 
 export type PostContent = z.infer<typeof postContentSchema>;

@@ -219,7 +219,7 @@ Every one of these is "add one file", by design:
 | ✅ | **M7** Agent team | Research once → strategist per plan → writer per account, team view |
 | ✅ | **M8** Content wind tunnel | Pre-publish A/B against the simulated audience, winner promotable |
 
-Next: thread support, evergreen recycling, outbound webhooks, Threads and X connectors, a CLI, and draft comments so an agent and
+Next: outbound webhooks, Threads and X connectors, a CLI, and draft comments so an agent and
 a human can discuss a post before it ships.
 
 ## License

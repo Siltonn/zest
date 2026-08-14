@@ -253,9 +253,19 @@ export default function InboxPage() {
                       </p>
                     </div>
                   ) : (
-                    <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
-                      {item.body}
-                    </p>
+                    <>
+                      <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
+                        {item.body}
+                      </p>
+                      {(item.threadParts ?? []).map((part, index) => (
+                        <p
+                          key={index}
+                          className="ml-3 whitespace-pre-wrap border-l-2 border-default-200 pl-3 text-sm leading-relaxed opacity-80"
+                        >
+                          {part}
+                        </p>
+                      ))}
+                    </>
                   )}
 
                   {item.reasoning && (

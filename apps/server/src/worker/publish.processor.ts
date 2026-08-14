@@ -99,6 +99,35 @@ export class PublishProcessor extends WorkerHost {
       const connector = getConnector(account.connectorId);
       const result = await connector.publish(toCredentials(account), claimed.content);
 
+      /**
+       * Thread parts chain as replies to whatever went out last. Every
+       * connector already speaks `reply()`, so threads need no per-platform
+       * code at all.
+       *
+       * Parts after a successful root are best-effort on purpose: the root is
+       * live, so failing the job here would retry it and double-post part one —
+       * the exact bug the claim exists to prevent. A broken chain is recorded
+       * on the post instead, where the operator can see it and finish by hand.
+       */
+      let threadNote: string | null = null;
+      let previousExternalId = result.externalId;
+      for (const [index, part] of (claimed.content.thread ?? []).entries()) {
+        try {
+          const published = await connector.reply(
+            toCredentials(account),
+            previousExternalId,
+            { text: part, media: [] },
+          );
+          previousExternalId = published.externalId;
+        } catch (error) {
+          threadNote = `Thread part ${index + 2} of ${
+            (claimed.content.thread?.length ?? 0) + 1
+          } failed to publish: ${(error as Error).message}`;
+          this.logger.warn(`${postId}: ${threadNote}`);
+          break;
+        }
+      }
+
       await transition(this.db, {
         postId,
         action: "publish_succeeded",
@@ -107,7 +136,7 @@ export class PublishProcessor extends WorkerHost {
           publishedAt: new Date(),
           externalId: result.externalId,
           externalUrl: result.url,
-          errorMessage: null,
+          errorMessage: threadNote,
         },
       });
 

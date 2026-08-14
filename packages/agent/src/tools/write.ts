@@ -77,6 +77,12 @@ export const proposePost = createTool({
       .string()
       .optional()
       .describe("The plan item this post fulfils, when writing from a plan"),
+    thread: z
+      .array(z.string())
+      .optional()
+      .describe(
+        "Follow-up parts, when one post cannot carry the idea and the platform supports threads. Each part respects the character limit on its own.",
+      ),
   }),
   execute: async (input, { requestContext }) => {
     const toolContext = readToolContext(requestContext);
@@ -89,7 +95,11 @@ export const proposePost = createTool({
     if (!account) return { ok: false, error: "Unknown account" };
 
     const connector = getConnector(account.connectorId);
-    const content = { text: input.text, media: [] };
+    const content = {
+      text: input.text,
+      media: [],
+      ...(input.thread?.length ? { thread: input.thread } : {}),
+    };
     const issues = connector.validate(content);
     const blocking = issues.filter((i) => i.severity === "error");
     if (blocking.length > 0) {

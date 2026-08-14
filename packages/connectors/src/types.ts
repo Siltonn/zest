@@ -159,6 +159,34 @@ export function validateAgainstMeta(
       severity: "error",
     });
   }
+  // Thread parts hold to the same limit individually — a thread is how you say
+  // more than the limit, not a way around it — and a platform that cannot
+  // thread refuses one outright rather than silently posting only part one.
+  for (const [index, part] of (content.thread ?? []).entries()) {
+    if (!meta.features.includes("threads")) {
+      issues.push({
+        field: "text",
+        message: `${meta.name} does not support threads`,
+        severity: "error",
+      });
+      break;
+    }
+    const partLength = [...part].length;
+    if (partLength === 0) {
+      issues.push({
+        field: "text",
+        message: `Thread part ${index + 2} is empty`,
+        severity: "error",
+      });
+    } else if (partLength > meta.charLimit) {
+      issues.push({
+        field: "text",
+        message: `Thread part ${index + 2}: ${partLength} characters — ${meta.name} allows ${meta.charLimit}`,
+        severity: "error",
+      });
+    }
+  }
+
   if (!meta.features.includes("images") && content.media.length > 0) {
     issues.push({
       field: "media",

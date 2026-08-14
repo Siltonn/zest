@@ -107,7 +107,9 @@ curl -s -X POST -H "Authorization: Bearer $ZEST_API_KEY" -H 'content-type: appli
   "$ZEST_URL/api/v1/posts"
 ```
 
-Omit `scheduledAt` to leave it unscheduled. Check `/api/v1/platforms` for the character
+Omit `scheduledAt` to leave it unscheduled. For a thread, pass the follow-up parts as
+`"thread": ["part 2", "part 3"]` — each part respects the character limit on its own,
+and platforms that cannot thread refuse rather than posting half of it. Check `/api/v1/platforms` for the character
 limit before writing rather than after being rejected.
 
 ## Answering the audience

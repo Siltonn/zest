@@ -7,6 +7,7 @@ export * as changeRequests from "./change-requests.ts";
 export * as memory from "./memory.ts";
 export * as onboarding from "./onboarding.ts";
 export * as plans from "./plans.ts";
+export * as recycle from "./recycle.ts";
 export * from "./events.ts";
 export * from "./notify.ts";
 export * as automations from "./automations.ts";

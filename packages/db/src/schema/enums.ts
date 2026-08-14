@@ -116,3 +116,5 @@ export const planItemStatusEnum = pgEnum("plan_item_status", [
   "written",
   "skipped",
 ]);
+
+export const planKindEnum = pgEnum("plan_kind", ["fresh", "evergreen"]);

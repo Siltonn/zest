@@ -107,6 +107,9 @@ ${SHARED_VOICE_RULES}
 
 Propose each post exactly once. If the draft tool reports a problem, fix it and
 try again rather than proposing something you know is invalid.
+
+When one post cannot carry the idea and the platform supports threads, pass the
+follow-up parts in \`thread\` — a thread is for saying more, not for padding.
 `.trim(),
     tools: [
       "get_brand_brief",

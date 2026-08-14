@@ -3,7 +3,7 @@ import { Inject, Logger } from "@nestjs/common";
 import type { Job, Queue } from "bullmq";
 import type { Redis } from "ioredis";
 import { eq, schema, type Database } from "@zest/db";
-import { Notifier, approvals, autonomy, emit, plans } from "@zest/core";
+import { Notifier, approvals, autonomy, emit, plans, recycle } from "@zest/core";
 import {
   runAnalysis,
   runCopy,
@@ -49,6 +49,28 @@ export class AgentProcessor extends WorkerHost {
        */
       case "planning":
       case "plan-research": {
+        const only = job.data.planId as string | undefined;
+        const active = await plans.activePlans(this.db, workspaceId);
+        const targets = only ? active.filter((p) => p.id === only) : active;
+
+        if (targets.length === 0) {
+          this.logger.warn(`No active plans for ${workspaceId}; nothing to plan`);
+          return { plans: 0 };
+        }
+
+        // Evergreen plans split off before research: their tick is a
+        // deterministic pick over measured results, needs no model, and must
+        // keep working when research would be skipped for lack of one.
+        const evergreen = targets.filter((p) => p.kind === "evergreen");
+        const fresh = targets.filter((p) => p.kind !== "evergreen");
+
+        for (const plan of evergreen) {
+          await this.queue.add("plan-recycle", { workspaceId, planId: plan.id });
+        }
+        if (fresh.length === 0) {
+          return { plans: 0, recycling: evergreen.length };
+        }
+
         const result = await runResearch({
           db: this.db,
           workspaceId,
@@ -56,19 +78,10 @@ export class AgentProcessor extends WorkerHost {
         });
         if (result.skipped) {
           this.logger.warn(`Research skipped: ${result.skipped}`);
-          return result;
+          return { ...result, recycling: evergreen.length };
         }
 
-        const only = job.data.planId as string | undefined;
-        const active = await plans.activePlans(this.db, workspaceId);
-        const targets = only ? active.filter((p) => p.id === only) : active;
-
-        if (targets.length === 0) {
-          this.logger.warn(`No active plans for ${workspaceId}; nothing to plan`);
-          return { ...result, plans: 0 };
-        }
-
-        for (const plan of targets) {
+        for (const plan of fresh) {
           await this.queue.add("plan-strategy", {
             workspaceId,
             planId: plan.id,
@@ -76,7 +89,26 @@ export class AgentProcessor extends WorkerHost {
             cycleId: result.runId,
           });
         }
-        return { ...result, plans: targets.length };
+        return { ...result, plans: fresh.length, recycling: evergreen.length };
+      }
+
+      /** One evergreen tick: re-propose each account's strongest rested post. */
+      case "plan-recycle": {
+        const result = await recycle.recycleTick(this.db, {
+          workspaceId,
+          planId: job.data.planId as string,
+          publisher: this.redis,
+        });
+        if (result.skipped) {
+          this.logger.log(`Recycle skipped: ${result.skipped}`);
+        }
+        if (result.proposed > 0) {
+          await this.notifyPending(
+            workspaceId,
+            "Evergreen re-runs are waiting for review",
+          );
+        }
+        return result;
       }
 
       /** Stage two: one programme's plan, fanning out to a writer per account. */

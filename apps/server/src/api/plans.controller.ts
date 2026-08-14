@@ -32,6 +32,7 @@ import { PlanningScheduler } from "../worker/planning.scheduler.js";
 
 const planInput = z.object({
   name: z.string().min(1),
+  kind: z.enum(["fresh", "evergreen"]).default("fresh"),
   objective: z.string().optional(),
   schedule: z.string().default("weekly"),
   accountIds: z.array(z.string().uuid()).min(1),
@@ -46,6 +47,7 @@ const planInput = z.object({
  */
 const planPatch = z.object({
   name: z.string().min(1).optional(),
+  kind: z.enum(["fresh", "evergreen"]).optional(),
   objective: z.string().nullish(),
   schedule: z.string().optional(),
   accountIds: z.array(z.string().uuid()).min(1).optional(),
@@ -176,6 +178,7 @@ export class PlansController {
     const plan = await plans.createPlan(this.db, {
       workspaceId: req.workspaceId,
       name: input.name,
+      kind: input.kind,
       objective: input.objective,
       schedule: input.schedule,
       accountIds: input.accountIds,
@@ -220,15 +223,26 @@ export class PlansController {
   /** Run this programme now: research first, then its strategist, then writers. */
   @Post(":id/run")
   async run(@Req() req: AuthedRequest, @Param("id") id: string) {
-    if (!hasModelAccess()) {
-      throw new BadRequestException(
-        "No LLM provider is configured. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY and restart to enable planning, drafting and reply triage.",
-      );
-    }
     const found = await plans.readPlan(this.db, req.workspaceId, id);
     if (!found) throw new NotFoundException("No such plan");
     if (found.accountIds.length === 0) {
       throw new BadRequestException("This plan has no accounts to write for");
+    }
+
+    // Evergreen ticks are a deterministic pick over measured results — no
+    // research, no model, so they must not be refused for lacking one.
+    if (found.plan.kind === "evergreen") {
+      const job = await this.agentQueue.add("plan-recycle", {
+        workspaceId: req.workspaceId,
+        planId: id,
+      });
+      return { queued: true, jobId: job.id };
+    }
+
+    if (!hasModelAccess()) {
+      throw new BadRequestException(
+        "No LLM provider is configured. Set OPENROUTER_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY and restart to enable planning, drafting and reply triage.",
+      );
     }
 
     const job = await this.agentQueue.add("plan-research", {

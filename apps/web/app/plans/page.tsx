@@ -42,6 +42,7 @@ type PlanItem = {
 type Plan = {
   id: string;
   name: string;
+  kind: "fresh" | "evergreen";
   objective: string | null;
   schedule: string;
   status: "active" | "paused" | "archived";
@@ -154,6 +155,7 @@ function PlanForm({
   onDone: () => void;
 }) {
   const [name, setName] = useState("");
+  const [kind, setKind] = useState<"fresh" | "evergreen">("fresh");
   const [objective, setObjective] = useState("");
   const [schedule, setSchedule] = useState("weekly");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -162,7 +164,8 @@ function PlanForm({
     mutationFn: () =>
       api.post("/plans", {
         name,
-        objective: objective || undefined,
+        kind,
+        objective: kind === "fresh" ? objective || undefined : undefined,
         schedule,
         accountIds: [...selected],
       }),
@@ -195,19 +198,38 @@ function PlanForm({
         </div>
 
         <div>
-          <Label className="mb-1 block text-sm font-medium">
-            What is it for{" "}
-            <span className="font-normal opacity-50">— the strategist reads this</span>
-          </Label>
-          <TextArea
-            value={objective}
-            onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-              setObjective(e.target.value)
-            }
-            rows={2}
-            placeholder="Get developers to try the new scheduler, without sounding like a press release."
+          <Label className="mb-1.5 block text-sm font-medium">What kind of programme</Label>
+          <Segmented
+            value={kind}
+            onChange={(value) => setKind(value as "fresh" | "evergreen")}
+            options={[
+              { id: "fresh", label: "Fresh content" },
+              { id: "evergreen", label: "Evergreen re-runs" },
+            ]}
           />
+          <p className="mt-1 text-xs opacity-50">
+            {kind === "fresh"
+              ? "Research → plan → write, on this cadence. Needs a model key."
+              : "Re-proposes each account's best published post that has rested 30 days. Measured, not generated — works with no model key, and still goes through your inbox."}
+          </p>
         </div>
+
+        {kind === "fresh" && (
+          <div>
+            <Label className="mb-1 block text-sm font-medium">
+              What is it for{" "}
+              <span className="font-normal opacity-50">— the strategist reads this</span>
+            </Label>
+            <TextArea
+              value={objective}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                setObjective(e.target.value)
+              }
+              rows={2}
+              placeholder="Get developers to try the new scheduler, without sounding like a press release."
+            />
+          </div>
+        )}
 
         <div>
           <Label className="mb-1.5 block text-sm font-medium">Cadence</Label>
@@ -324,6 +346,11 @@ function PlanCard({
             <Chip size="sm" variant="soft">
               {plan.schedule}
             </Chip>
+            {plan.kind === "evergreen" && (
+              <Chip size="sm" variant="soft" color="accent">
+                ♻ evergreen
+              </Chip>
+            )}
           </div>
           {plan.objective && (
             <p className="mt-1 text-sm opacity-60">{plan.objective}</p>
@@ -344,19 +371,30 @@ function PlanCard({
           </div>
         </div>
 
-        <div className="shrink-0 text-right text-xs opacity-55">
-          <div>{plan.itemCounts.planned} to write</div>
-          <div>{plan.itemCounts.written} written</div>
-        </div>
+        {plan.kind === "fresh" ? (
+          <div className="shrink-0 text-right text-xs opacity-55">
+            <div>{plan.itemCounts.planned} to write</div>
+            <div>{plan.itemCounts.written} written</div>
+          </div>
+        ) : (
+          <div className="shrink-0 text-right text-xs opacity-55">
+            <div>re-runs its best posts</div>
+            <div>30-day cooldown</div>
+          </div>
+        )}
       </Card.Header>
 
       <Card.Footer className="flex flex-wrap gap-2">
         <Button size="sm" onPress={() => run.mutate()} isPending={run.isPending}>
           Run now
         </Button>
-        <Button size="sm" variant="secondary" onPress={onToggle}>
-          {isOpen ? "Hide plan" : `Show plan (${plan.itemCounts.planned + plan.itemCounts.written})`}
-        </Button>
+        {plan.kind === "fresh" && (
+          <Button size="sm" variant="secondary" onPress={onToggle}>
+            {isOpen
+              ? "Hide plan"
+              : `Show plan (${plan.itemCounts.planned + plan.itemCounts.written})`}
+          </Button>
+        )}
         <Button
           size="sm"
           variant="tertiary"

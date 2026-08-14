@@ -96,6 +96,7 @@ export async function createPlan(
   input: {
     workspaceId: string;
     name: string;
+    kind?: "fresh" | "evergreen";
     objective?: string;
     schedule?: string;
     accountIds: string[];
@@ -108,6 +109,7 @@ export async function createPlan(
     .values({
       workspaceId: input.workspaceId,
       name: input.name,
+      kind: input.kind ?? "fresh",
       objective: input.objective ?? null,
       schedule: input.schedule ?? "weekly",
       startsAt: input.startsAt ?? null,

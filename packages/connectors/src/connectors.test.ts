@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { getConnector, listConnectorMeta } from "./registry.ts";
+import { validateAgainstMeta, type ConnectorFeature } from "./types.ts";
 import { createPkcePair, pkceCookieName, signState, verifyState } from "./oauth.ts";
 
 const SECRET = "test-oauth-signing-secret";
@@ -96,4 +97,50 @@ test("PKCE challenge differs from its verifier", () => {
 test("parallel connect flows get distinct PKCE cookies", () => {
   assert.notEqual(pkceCookieName("state-a"), pkceCookieName("state-b"));
   assert.equal(pkceCookieName("state-a"), pkceCookieName("state-a"));
+});
+
+test("thread parts hold to the character limit individually", () => {
+  const pomelo = getConnector("pomelo");
+  const long = "x".repeat(500);
+
+  // A thread is how you say more than the limit, not a way around it.
+  const issues = pomelo.validate({
+    text: "Part one is fine.",
+    media: [],
+    thread: ["Part two is fine.", long],
+  });
+  assert.ok(
+    issues.some((i) => i.severity === "error" && /part 3/i.test(i.message)),
+    "the oversized part should be named, not just 'too long somewhere'",
+  );
+
+  const ok = pomelo.validate({
+    text: "Part one.",
+    media: [],
+    thread: ["Part two.", "Part three."],
+  });
+  assert.equal(ok.filter((i) => i.severity === "error").length, 0);
+});
+
+test("a platform without threads refuses one outright", () => {
+  // Refusing beats silently publishing only part one — the operator wrote a
+  // thread, and half a thread is a different post.
+  const meta = {
+    id: "flat",
+    name: "Flat",
+    icon: "▪",
+    color: "#000",
+    charLimit: 280,
+    maxImages: 0,
+    features: ["replies"] as ConnectorFeature[],
+    setupHint: "",
+  };
+  const issues = validateAgainstMeta(meta, {
+    text: "First.",
+    media: [],
+    thread: ["Second."],
+  });
+  assert.ok(
+    issues.some((i) => i.severity === "error" && /does not support threads/.test(i.message)),
+  );
 });

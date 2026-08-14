@@ -73,6 +73,25 @@ export function PostDrawer({
               {post.content.text}
             </p>
 
+            {(post.content.thread ?? []).map((part, index) => (
+              <p
+                key={index}
+                className="ml-4 mt-2 whitespace-pre-wrap rounded-xl border border-default-200/60 border-l-2 border-l-default-300 p-3 text-sm leading-relaxed"
+              >
+                <span className="mb-1 block text-xs opacity-45">
+                  Part {index + 2} · published as a reply
+                </span>
+                {part}
+              </p>
+            ))}
+
+            {post.recycledFromId && (
+              <p className="mt-2 text-xs opacity-50">
+                ♻ Evergreen re-run of an earlier post — the reasoning below carries
+                its numbers.
+              </p>
+            )}
+
             {post.errorMessage && (
               <Alert status="danger" className="mt-3">
                 <Alert.Indicator />

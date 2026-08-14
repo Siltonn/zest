@@ -35,6 +35,8 @@ const createPostSchema = z.object({
   accountId: z.string().uuid(),
   text: z.string().min(1),
   media: z.array(z.object({ url: z.string(), altText: z.string().optional() })).default([]),
+  /** Follow-up thread parts; the connector's validate() enforces support. */
+  thread: z.array(z.string().min(1)).max(24).optional(),
   scheduledAt: z.string().datetime().optional(),
 });
 
@@ -121,7 +123,11 @@ export class PostsController {
       );
     if (!account) throw new NotFoundException("Account not found");
 
-    const content = { text: input.text, media: input.media };
+    const content = {
+      text: input.text,
+      media: input.media,
+      ...(input.thread?.length ? { thread: input.thread } : {}),
+    };
     const issues = getConnector(account.connectorId)
       .validate(content)
       .filter((i) => i.severity === "error");

@@ -88,13 +88,21 @@ export type Account = {
     color: string;
     charLimit: number;
     maxImages: number;
+    features: string[];
   } | null;
 };
 
 export type Post = {
   id: string;
   status: PostStatus;
-  content: { text: string; media: { url: string; altText?: string }[] };
+  /** Set when this is an evergreen re-run of an earlier post. */
+  recycledFromId?: string | null;
+  content: {
+    text: string;
+    media: { url: string; altText?: string }[];
+    /** Follow-up thread parts, text-only. */
+    thread?: string[];
+  };
   suggestedSlotAt: string | null;
   scheduledAt: string | null;
   publishedAt: string | null;
@@ -120,6 +128,8 @@ export type InboxItem = {
   agentRunId: string | null;
   createdAt: string;
   context?: { author: string; text: string; sentiment?: string | null };
+  /** Posts only: follow-up thread parts. */
+  threadParts?: string[];
   /** Memory proposals only: the document as it stands, for the diff. */
   before?: string | null;
   /** Plan cards only: the topics waiting to be written. */

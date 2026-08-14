@@ -22,6 +22,7 @@ export default function ComposePage() {
   const [text, setText] = useState("");
   const [when, setWhen] = useState("");
   const [media, setMedia] = useState<{ url: string; altText?: string }[]>([]);
+  const [thread, setThread] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -31,6 +32,9 @@ export default function ComposePage() {
   });
 
   const account = accounts.find((a) => a.id === accountId) ?? accounts[0];
+  // Threads only where the platform can chain them; elsewhere the button is
+  // absent rather than disabled-with-an-excuse.
+  const supportsThreads = Boolean(account?.platform?.features.includes("threads"));
   const limit = account?.platform?.charLimit ?? 280;
   const length = [...text].length;
   const over = length > limit;
@@ -62,6 +66,9 @@ export default function ComposePage() {
         accountId: account?.id,
         text,
         media,
+        ...(supportsThreads && thread.filter((part) => part.trim()).length
+          ? { thread: thread.filter((part) => part.trim()) }
+          : {}),
         ...(when ? { scheduledAt: when } : {}),
       }),
     onSuccess: () => {
@@ -129,6 +136,56 @@ export default function ComposePage() {
               Rewrites your draft in this account's voice — your point stays yours.
             </span>
           </div>
+
+          {thread.map((part, index) => {
+            const partLength = [...part].length;
+            const partOver = partLength > limit;
+            return (
+              <div key={index} className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium opacity-50">
+                    Part {index + 2}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-xs ${partOver ? "text-danger" : "opacity-45"}`}
+                    >
+                      {partLength}/{limit}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="tertiary"
+                      onPress={() =>
+                        setThread((parts) => parts.filter((_, i) => i !== index))
+                      }
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+                <TextArea
+                  value={part}
+                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                    setThread((parts) =>
+                      parts.map((item, i) => (i === index ? e.target.value : item)),
+                    )
+                  }
+                  rows={3}
+                  placeholder={`Part ${index + 2} — published as a reply to part ${index + 1}`}
+                />
+              </div>
+            );
+          })}
+
+          {supportsThreads && (thread.length > 0 || length > limit * 0.7) && (
+              <Button
+                size="sm"
+                variant="tertiary"
+                onPress={() => setThread((parts) => [...parts, ""])}
+              >
+                Add a thread part
+              </Button>
+            )}
 
           {media.length > 0 && (
             <div className="flex flex-wrap gap-2">

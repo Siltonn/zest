@@ -66,6 +66,11 @@ export const posts = pgTable(
     externalUrl: text(),
     errorMessage: text(),
     reasoning: text(),
+    /**
+     * Set when this post is an evergreen re-run of an earlier one. Provenance
+     * ("why does this exist") and the recycle cooldown both read it.
+     */
+    recycledFromId: uuid(),
     createdByActor: jsonb().$type<Actor>().notNull(),
     agentRunId: uuid(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

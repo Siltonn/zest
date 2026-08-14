@@ -35,6 +35,8 @@ export type InboxItem = {
   createdAt: Date;
   /** Present on reply drafts: what the agent is answering. */
   context?: { author: string; text: string; sentiment?: string | null };
+  /** Present on post proposals that are threads: the follow-up parts. */
+  threadParts?: string[];
   /** Present on memory proposals: the document as it stands today. */
   before?: string | null;
   /**
@@ -113,6 +115,7 @@ export async function listInbox(
     reasoning: post.reasoning,
     agentRunId: post.agentRunId,
     createdAt: post.createdAt,
+    ...(post.content.thread?.length ? { threadParts: post.content.thread } : {}),
   }));
 
   // A persona proposal can name an account that has nothing else pending, so
