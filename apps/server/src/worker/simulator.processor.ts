@@ -1,3 +1,4 @@
+import { buildPersonaReplyGenerator } from "./persona-replies.js";
 import { InjectQueue, Processor, WorkerHost } from "@nestjs/bullmq";
 import { Inject, Logger } from "@nestjs/common";
 import type { Job, Queue } from "bullmq";
@@ -50,7 +51,10 @@ export class SimulatorProcessor extends WorkerHost {
         await advanceClock(this.db, workspace.id, tickAmount(clock, 60_000));
       }
 
-      const events = await releaseDueEvents(this.db, workspace.id, { limit: 300 });
+      const events = await releaseDueEvents(this.db, workspace.id, {
+        limit: 300,
+        generateReply: buildPersonaReplyGenerator(),
+      });
       released += events.length;
 
       for (const event of events) {

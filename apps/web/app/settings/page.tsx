@@ -47,7 +47,12 @@ export default function SettingsPage() {
     queryKey: ["me"],
     queryFn: () =>
       api.get<{
-        capabilities?: { llm: boolean; provider?: string; model?: string | null };
+        capabilities?: {
+          llm: boolean;
+          provider?: string;
+          model?: string | null;
+          cheapModel?: string | null;
+        };
       }>("/me"),
   });
 
@@ -198,19 +203,26 @@ export default function SettingsPage() {
         <Card.Header>
           <Card.Title className="text-base">Model provider</Card.Title>
           <p className="text-xs opacity-50">
-            Which provider the thinking steps actually run through. Set by
-            environment, not here — a key belongs in the deployment, not the database.
+            Set by environment, not here — a key belongs in the deployment, and the
+            models are tiered by role on purpose: strategy and writing get the capable
+            one, triage-volume work gets the cheap one. Override with ZEST_MODEL /
+            ZEST_MODEL_CHEAP if you must.
           </p>
         </Card.Header>
         <Card.Content>
           {me?.capabilities?.llm ? (
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Chip size="sm" variant="soft" color="success">
-                {me.capabilities.provider ?? "configured"}
-              </Chip>
-              <span className="opacity-60">
-                {me.capabilities.model ?? "using the built-in default model"}
-              </span>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip size="sm" variant="soft" color="success">
+                  {me.capabilities.provider ?? "configured"}
+                </Chip>
+              </div>
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs opacity-60">
+                <span>writing &amp; strategy: {me.capabilities.model ?? "default"}</span>
+                <span>
+                  triage &amp; simulated audience: {me.capabilities.cheapModel ?? "default"}
+                </span>
+              </div>
             </div>
           ) : (
             <p className="text-sm opacity-60">

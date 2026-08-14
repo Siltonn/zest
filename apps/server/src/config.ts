@@ -33,6 +33,8 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   /** Overrides the default model; on OpenRouter use a `vendor/model` slug. */
   ZEST_MODEL: z.string().optional(),
+  /** Overrides the cheap tier (triage-volume work, simulated audience replies). */
+  ZEST_MODEL_CHEAP: z.string().optional(),
   // Defaults point at the Mailpit container in docker-compose, so the demo
   // delivers real mail to a real inbox with nothing to configure.
   SMTP_HOST: z.string().default("localhost"),

@@ -31,7 +31,7 @@ export async function startRun(
     workspaceId: string;
     trigger: TriggerName;
     role?: RoleName;
-    model?: string;
+    model?: string | null;
     publisher?: EventPublisher;
     /** Which programme this stage serves, and the account it writes for. */
     planId?: string | null;

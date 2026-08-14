@@ -4,7 +4,7 @@ import type { EventPublisher } from "@zest/core";
 import { agent as agentActor } from "@zest/shared";
 import { createRoleAgent, type RoleName } from "./agents.ts";
 import { buildRequestContext } from "./context.ts";
-import { NoModelConfiguredError, hasModelAccess } from "./models.ts";
+import { NoModelConfiguredError, hasModelAccess, resolvedModelId } from "./models.ts";
 import {
   finishRun,
   reportProgress,
@@ -96,7 +96,7 @@ export async function runResearch(options: RunOptions): Promise<ResearchResult> 
     trigger: "cron_plan",
     role: "researcher",
     publisher: options.publisher,
-    model: options.model,
+    model: resolvedModelId(options.model),
   });
 
   // The cycle is named after the run that starts it, so every later stage can
@@ -157,7 +157,7 @@ export async function runStrategy(
     planId,
     cycleId: options.cycleId ?? null,
     publisher: options.publisher,
-    model: options.model,
+    model: resolvedModelId(options.model),
   });
 
   try {
@@ -248,7 +248,7 @@ export async function runCopy(
     accountId,
     cycleId: options.cycleId ?? null,
     publisher: options.publisher,
-    model: options.model,
+    model: resolvedModelId(options.model),
   });
 
   try {
@@ -329,7 +329,7 @@ export async function runReplyTriage(options: RunOptions): Promise<TriageResult>
     trigger: "event_reply",
     role: "community",
     publisher: options.publisher,
-    model: options.model,
+    model: resolvedModelId(options.model),
   });
 
   try {
@@ -379,7 +379,7 @@ export async function runAnalysis(
     trigger: "cron_analyze",
     role: "analyst",
     publisher: options.publisher,
-    model: options.model,
+    model: resolvedModelId(options.model),
   });
 
   try {
@@ -440,7 +440,7 @@ export async function runChat(
     trigger: options.trigger ?? "chat",
     role: "assistant",
     publisher: options.publisher,
-    model: options.model,
+    model: resolvedModelId(options.model),
   });
 
   try {
@@ -532,7 +532,7 @@ export async function runRework(
     role: "copywriter",
     accountId: row.account.id,
     publisher: options.publisher,
-    model: options.model,
+    model: resolvedModelId(options.model),
   });
 
   try {

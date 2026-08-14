@@ -24,7 +24,7 @@ import {
   readClock,
   releaseDueEvents,
 } from "@zest/simulator";
-import { activeProvider, hasModelAccess } from "@zest/agent";
+import { activeProvider, hasModelAccess, resolvedModelId, CHEAP_MODEL } from "@zest/agent";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
@@ -35,6 +35,7 @@ import {
   QUEUE_SIMULATOR,
 } from "../queue/queue.constants.js";
 import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
+import { buildPersonaReplyGenerator } from "../worker/persona-replies.js";
 
 /** Workspace settings, accounts, memory, autonomy, analytics and audit. */
 @Controller("api/v1")
@@ -87,7 +88,9 @@ export class WorkspaceController {
       capabilities: {
         llm: hasModelAccess(),
         provider: activeProvider(),
-        model: process.env.ZEST_MODEL ?? null,
+        // The resolved ids, not the raw env — what a run would actually record.
+        model: resolvedModelId(),
+        cheapModel: resolvedModelId(process.env.ZEST_MODEL_CHEAP ?? CHEAP_MODEL),
       },
     };
   }
@@ -450,7 +453,10 @@ export class WorkspaceController {
 
     // Released inline so the response can say what actually happened. Waiting
     // on the queue would mean answering "done" before anything had occurred.
-    const released = await releaseDueEvents(this.db, req.workspaceId, { limit: 500 });
+    const released = await releaseDueEvents(this.db, req.workspaceId, {
+      limit: 500,
+      generateReply: buildPersonaReplyGenerator(),
+    });
     await this.ingestQueue.add("poll-engagement", { workspaceId: req.workspaceId });
 
     const replies = released.filter((e) => e.kind === "reply").length;

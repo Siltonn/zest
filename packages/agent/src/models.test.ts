@@ -5,6 +5,7 @@ import {
   CHEAP_MODEL,
   activeProvider,
   hasModelAccess,
+  resolvedModelId,
   toOpenRouterModel,
 } from "./models.ts";
 
@@ -53,4 +54,34 @@ test("any single key is enough to switch the thinking steps on", () => {
   assert.equal(hasModelAccess({ ANTHROPIC_API_KEY: "x" } as never), true);
   assert.equal(hasModelAccess({ OPENAI_API_KEY: "x" } as never), true);
   assert.equal(hasModelAccess({} as never), false);
+});
+
+test("the cheap tier stays cheap on every provider", () => {
+  // Otherwise "use the cheap model" quietly means "use the flagship".
+  assert.equal(
+    resolvedModelId(CHEAP_MODEL, { OPENROUTER_API_KEY: "x" } as never),
+    "anthropic/claude-haiku-4.5",
+  );
+  assert.equal(
+    resolvedModelId(CHEAP_MODEL, { ANTHROPIC_API_KEY: "x" } as never),
+    CHEAP_MODEL,
+  );
+  assert.equal(
+    resolvedModelId(CHEAP_MODEL, { OPENAI_API_KEY: "x" } as never),
+    "gpt-4o-mini",
+  );
+});
+
+test("runs record the id that will actually answer", () => {
+  assert.equal(
+    resolvedModelId(undefined, { OPENROUTER_API_KEY: "x" } as never),
+    "anthropic/claude-sonnet-5",
+  );
+  assert.equal(
+    resolvedModelId(undefined, { ANTHROPIC_API_KEY: "x" } as never),
+    DEFAULT_MODEL,
+  );
+  // No key: null, matching hasModelAccess — a run that cannot think records
+  // no model rather than a lie.
+  assert.equal(resolvedModelId(undefined, {} as never), null);
 });

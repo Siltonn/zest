@@ -20,6 +20,18 @@ export const DEFAULT_MODEL = "claude-sonnet-5";
 export const CHEAP_MODEL = "claude-haiku-4-5-20251001";
 
 /**
+ * Model choice is deliberately not a user setting.
+ *
+ * The roles that matter (strategist, copywriter) depend on tool calling, which
+ * much of any router's catalogue does not support — a free picker is a footgun
+ * that fails as "planning ran and nothing happened". Role-appropriate tiers
+ * beat any single user choice, and names pinned in a database rot while
+ * defaults in code update with releases. Operators who do want control get env
+ * overrides (`ZEST_MODEL`, `ZEST_MODEL_CHEAP`); everyone else gets defaults
+ * that work. The UI shows what is in use rather than asking.
+ */
+
+/**
  * OpenRouter namespaces its models by vendor, so the direct-provider ids do not
  * resolve there. Rather than making the operator translate, the two defaults are
  * mapped and anything else is passed through untouched — a slug that already
@@ -78,9 +90,38 @@ export function resolveModel(
   }
 
   if (env.ANTHROPIC_API_KEY && !id.startsWith("gpt")) return anthropic(id);
-  if (env.OPENAI_API_KEY) return openai(id.startsWith("gpt") ? id : "gpt-5");
+  if (env.OPENAI_API_KEY) {
+    // The cheap tier has to stay cheap on OpenAI too, or "use the cheap model"
+    // quietly means "use the flagship".
+    if (id === CHEAP_MODEL) return openai("gpt-4o-mini");
+    return openai(id.startsWith("gpt") ? id : "gpt-5");
+  }
 
   throw new NoModelConfiguredError();
+}
+
+/** The cheap tier: high-volume, low-stakes work. Overridable, never pickable. */
+export function resolveCheapModel(
+  env: NodeJS.ProcessEnv = process.env,
+): ReturnType<typeof anthropic> {
+  return resolveModel(env.ZEST_MODEL_CHEAP ?? CHEAP_MODEL, env);
+}
+
+/**
+ * The id a run will actually use, for the audit trail. Provenance is the
+ * product's pitch, and "which model wrote this" is the first question when a
+ * draft comes back wrong — so it is recorded per run, not inferred later.
+ */
+export function resolvedModelId(
+  preferred?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  if (!hasModelAccess(env)) return null;
+  const id = preferred ?? env.ZEST_MODEL ?? DEFAULT_MODEL;
+  if (env.OPENROUTER_API_KEY) return toOpenRouterModel(id);
+  if (env.ANTHROPIC_API_KEY && !id.startsWith("gpt")) return id;
+  if (id === CHEAP_MODEL) return "gpt-4o-mini";
+  return id.startsWith("gpt") ? id : "gpt-5";
 }
 
 /**
