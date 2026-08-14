@@ -460,15 +460,24 @@ export async function runAnalysis(
 
     const result = await runRole(options, "analyst", `${context}\n\n${task}`, handle.id);
 
-    // A weekly report nobody can find is not a report. Store it as a versioned
-    // memory doc so the dashboard can show the latest one.
-    if (options.weekly && result.text.trim()) {
-      await memory.writeMemory(db, {
-        workspaceId,
-        kind: "report",
-        contentMd: result.text,
-        actor: agentActor(handle.id, "analyst"),
-      });
+    // The report is filed by the analyst through `write_report`, not scraped
+    // from the run's text: `result.text` concatenates every step, so saving it
+    // put "I'll review the recent performance… Let me start by gathering the
+    // analytics" at the top of the operator's weekly report.
+    if (options.weekly) {
+      const filed = await memory.readMemory(db, workspaceId, "report");
+      if (!filed) {
+        await finishRun(db, handle, {
+          transcript: result.transcript,
+          output: result.text,
+          error: "The analyst finished without filing a report.",
+        });
+        return {
+          runId: handle.id,
+          report: "",
+          skipped: "The analyst finished without filing a report.",
+        };
+      }
     }
 
     await finishRun(db, handle, { transcript: result.transcript });

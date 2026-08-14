@@ -490,6 +490,38 @@ export const addPlanItems = createTool({
   },
 });
 
+/**
+ * The weekly report, submitted rather than scraped.
+ *
+ * It used to be saved from the run's concatenated text, which meant the
+ * operator's report opened with "I'll review the recent performance and posts…
+ * Let me start by gathering the analytics" — the model's narration between tool
+ * calls, stored as the document. Same lesson as `add_plan_items`: take what the
+ * model explicitly submits, do not parse what it happened to say.
+ *
+ * Not routed through `update_memory` on purpose. A report is a record of what
+ * happened, not a change to policy, so it saves directly instead of waiting for
+ * someone to approve last week's numbers.
+ */
+export const writeReport = createTool({
+  id: "write_report",
+  description:
+    "File the weekly report. Pass the finished report only — no preamble, no narration about what you are about to do. Markdown, with what went out, how it did, what you learned, and what you plan next.",
+  inputSchema: z.object({
+    contentMd: z.string().min(1),
+  }),
+  execute: async (input, { requestContext }) => {
+    const { db, workspaceId, actor, runId } = readToolContext(requestContext);
+    const doc = await memory.writeMemory(db, {
+      workspaceId,
+      kind: "report",
+      contentMd: input.contentMd,
+      actor,
+    });
+    return { ok: true, version: doc.version, runId };
+  },
+});
+
 export const WRITE_TOOLS = {
   add_plan_items: addPlanItems,
   draft_post: draftPost,
@@ -498,5 +530,6 @@ export const WRITE_TOOLS = {
   propose_reply: proposeReply,
   ignore_inbound: ignoreInbound,
   update_memory: updateMemory,
+  write_report: writeReport,
   request_autonomy: requestAutonomy,
 };

@@ -160,10 +160,15 @@ a pattern; say so rather than inventing a trend.
 Then update the learnings document with what you are confident about, and update
 the strategy if the evidence justifies a change. Explain each change in one line.
 
+When asked for the weekly report, file it with write_report — the finished
+report only, no narration about what you are about to do. Whatever you pass is
+what the operator reads.
+
 If a run of your proposals has been approved without edits, you may request
 autonomy for that action. Ask once, with the reason, and accept the answer.
 `.trim(),
     tools: [
+      "write_report",
       "get_analytics",
       "list_posts",
       "get_strategy",
