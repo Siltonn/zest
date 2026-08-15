@@ -135,12 +135,29 @@ export const ForwardIcon = (p: IconProps) => (
   </Icon>
 );
 
+/**
+ * The brand mark — deliberately not built on `Icon`.
+ *
+ * It used to be: a stroked arc, a stem and a zigzag, drawn with the same 1.6px
+ * line as the nav glyphs. That is why it read as a fifteenth utility icon
+ * rather than a logo. A mark has a different job — it has to be recognisable at
+ * 18px in a browser tab, survive being reversed, and work in one colour — and
+ * that job wants a solid shape, not a line drawing.
+ *
+ * So: a solid Z, and the badge it sits in supplies the disc. Drawing the disc
+ * into the mark as well was the first attempt, and inside a 40px tile it
+ * produced three alternating bands — accent ring, dark disc, accent counter —
+ * where the ring carried no meaning and only muddied the shape. The container
+ * already is the circle; the mark only has to be the letter.
+ *
+ * Citrus is carried by the accent the whole product is painted in, not by the
+ * glyph. A stem drawn on top — tried, variant 5d — reads as charm at 88px and
+ * as a smudge at 18.
+ */
 export const ZestMark = (p: IconProps) => (
-  <Icon {...p} strokeWidth={1.6}>
-    <path d="M12 20.5a7.5 7.5 0 1 0-7.4-8.8" />
-    <path d="M12 3.5c0-.9.6-1.7 1.9-2.2" />
-    <path d="M8 12.5h8l-8 5h8" />
-  </Icon>
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" {...p}>
+    <path fill="currentColor" d="M5.6 5h12.8v2.9L9.9 18.1h8.5V21H5.6v-2.9L14.1 7.9H5.6V5Z" />
+  </svg>
 );
 
 export const SunIcon = (p: IconProps) => (

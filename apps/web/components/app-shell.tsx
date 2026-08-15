@@ -148,7 +148,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex items-center gap-3 px-4 py-4">
           <Link
             href="/"
-            className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-foreground text-background"
+            // The accent, not `bg-foreground`: that inverted between themes —
+            // a black tile on light, a white one on dark — so the logo had no
+            // stable identity. This is the one place the accent means "this is
+            // Zest" rather than "this is the action", and it looks it.
+            className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"
             aria-label="Zest home"
           >
             <ZestMark className="size-5" />

@@ -207,7 +207,7 @@ function Welcome({ onPick }: { onPick: (text: string) => void }) {
   return (
     <div className="pt-10">
       <div className="mb-6 text-center">
-        <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-foreground text-background">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground">
           <ZestMark className="size-6" />
         </div>
         <h1 className="mt-3 text-xl font-semibold tracking-tight">
@@ -246,7 +246,7 @@ function MessageRow({ message }: { message: Message }) {
     <div className="flex gap-3">
       <Avatar className="mt-0.5 size-7 shrink-0">
         <Avatar.Fallback
-          className={`text-xs ${isUser ? "" : "bg-foreground text-background"}`}
+          className={`text-xs ${isUser ? "" : "bg-accent text-accent-foreground"}`}
         >
           {isUser ? "You" : <ZestMark className="size-4" />}
         </Avatar.Fallback>
@@ -370,7 +370,7 @@ function Thinking() {
   return (
     <div className="flex gap-3">
       <Avatar className="mt-0.5 size-7 shrink-0">
-        <Avatar.Fallback className="bg-foreground text-background">
+        <Avatar.Fallback className="bg-accent text-accent-foreground">
           <ZestMark className="size-4" />
         </Avatar.Fallback>
       </Avatar>

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!--
+    The browser-tab mark. Next.js serves any app/icon.svg as the favicon, and
+    until now there was none, so tabs fell back to the generic globe.
+
+    Self-contained rather than a knockout: a tab renders this against whatever
+    chrome the browser is wearing, so the mark has to bring its own ground.
+
+    Hex, not the oklch() the stylesheet uses. This file is served as an image
+    and never sees the stylesheet, and favicon rasterisation is the one place a
+    colour space the parser dislikes turns the icon black rather than falling
+    back. These are the sRGB of the accent and accent-foreground tokens in
+    globals.css; keep them in step if the theme moves.
+
+    (And no CSS variable names in here: an XML comment may not contain a double
+    hyphen, so writing them the usual way makes the whole file fail to parse.)
+  -->
+  <rect width="24" height="24" rx="5.6" fill="#f8d659"/>
+  <path fill="#1f1a09" d="M6.6 5.4h10.8v2.5L9.9 16.1h7.5v2.5H6.6v-2.5l7.5-8.2H6.6V5.4Z"/>
+</svg>
