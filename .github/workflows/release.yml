@@ -1,0 +1,82 @@
+name: Release images
+
+# Tags only. Building on every push to main would mean an arm64 emulation run
+# per commit, which is minutes of CI for an artifact nobody asked for; a release
+# is the moment someone actually wants something pullable.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish as (e.g. v0.1.0). Defaults to the run's SHA."
+        required: false
+
+permissions:
+  contents: read
+  # The whole reason GHCR needs no account, no PAT and no repository secret:
+  # the token the runner already has can push, once you say so here.
+  packages: write
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      # Both images publish or neither does not apply here — a failed web build
+      # should not throw away a good server build that takes just as long.
+      fail-fast: false
+      matrix:
+        include:
+          - name: server
+            dockerfile: apps/server/Dockerfile
+          - name: web
+            dockerfile: apps/web/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ghcr.io rejects an uppercase path, and this repository's owner has one.
+      # `${VAR,,}` is bash lowercasing; github.repository would push it verbatim.
+      - name: Resolve image name
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.name }}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # Three kinds on purpose. `latest` is what a copy-pasted compose file
+          # names; the semver pair lets someone pin a minor and still get
+          # patches; the sha is what you reach for when a release is bad and
+          # "which commit was that" is the only question that matters.
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ inputs.tag }},enable=${{ inputs.tag != '' }}
+            type=sha,format=long
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          # arm64 matters more than it looks: a lot of cheap VPS stock is ARM
+          # now, and so is every Apple Silicon laptop running Docker. It is
+          # emulated here and slow — that cost is the point of doing it once in
+          # CI instead of on every self-hoster's machine.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Layer cache in the Actions cache, so a release that only changed the
+          # web app does not rebuild the server's dependency install.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

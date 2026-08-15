@@ -38,12 +38,18 @@ other way around — as an operations agent with a supervision UI:
 ## Quick start
 
 ```bash
-git clone https://github.com/<you>/zest.git && cd zest
+git clone https://github.com/Siltonn/zest.git && cd zest
 cp .env.example .env      # fill in nothing to start — defaults work
+docker compose pull       # published images; drop this line to build from source
 docker compose up
 ```
 
 Then open <http://localhost:3000>.
+
+The images are on [GHCR](https://github.com/Siltonn/zest/pkgs/container/zest-server),
+built for amd64 and arm64. `pull` is optional — with no image available, compose builds
+the same Dockerfiles from this checkout, which is what you want if you are changing
+anything.
 
 Without an LLM key the full platform loop still works — compose, schedule, publish,
 simulated engagement, analytics, and answering comments by hand. Add one key to `.env` to

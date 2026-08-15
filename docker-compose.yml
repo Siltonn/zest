@@ -34,6 +34,12 @@ services:
       - "1025:1025"
 
   server:
+    # Both `image` and `build` on purpose. `docker compose pull` fetches the
+    # published image and skips a multi-minute build; with no image available —
+    # before the first release, or on a fork — compose falls back to building
+    # this same Dockerfile. One file serves the person trying it and the person
+    # changing it.
+    image: ghcr.io/siltonn/zest-server:${ZEST_VERSION:-latest}
     build:
       context: .
       dockerfile: apps/server/Dockerfile
@@ -66,6 +72,7 @@ services:
         condition: service_healthy
 
   web:
+    image: ghcr.io/siltonn/zest-web:${ZEST_VERSION:-latest}
     build:
       context: .
       dockerfile: apps/web/Dockerfile
