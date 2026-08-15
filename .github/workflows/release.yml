@@ -1,51 +1,63 @@
 name: Release images
 
-# Tags only. Building on every push to main would mean an arm64 emulation run
-# per commit, which is minutes of CI for an artifact nobody asked for; a release
-# is the moment someone actually wants something pullable.
+# Tags only. Building on every push to main would spend CI on an artifact nobody
+# asked for; a release is the moment someone wants something pullable.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to publish as (e.g. v0.1.0). Defaults to the run's SHA."
+        description: "Extra tag to publish as (e.g. v0.1.0). Optional."
         required: false
 
 permissions:
   contents: read
-  # The whole reason GHCR needs no account, no PAT and no repository secret:
-  # the token the runner already has can push, once you say so here.
+  # The whole reason GHCR needs no account, no PAT and no repository secret: the
+  # token the runner already has can push, once the job asks for it.
   packages: write
 
+env:
+  # ghcr.io rejects an uppercase path and this repository's owner has one, so the
+  # name is lowercased per job rather than taken from github.repository verbatim.
+  REGISTRY: ghcr.io
+
 jobs:
-  images:
-    runs-on: ubuntu-latest
+  # Each architecture builds on a runner of that architecture. The obvious
+  # alternative — one job emitting both platforms through QEMU — costs far more
+  # than the usual "emulation is a few times slower": the heavy steps here are
+  # pnpm install and tsc, so the thing being emulated is Node, and QEMU handles
+  # a JIT that writes its own machine code worse than it handles static code.
+  # Two native jobs also run in parallel, so the wall clock is one build, not two.
+  build:
     strategy:
-      # Both images publish or neither does not apply here — a failed web build
-      # should not throw away a good server build that takes just as long.
+      # A failed web build should not discard a good server build that took just
+      # as long, and one architecture failing should still leave the other's
+      # digest to look at.
       fail-fast: false
       matrix:
+        # Spelled out rather than crossed, because the runner is a function of
+        # the platform and the dockerfile is a function of the image — a product
+        # of two axes plus `include` reads as if it should work and does not.
         include:
-          - name: server
-            dockerfile: apps/server/Dockerfile
-          - name: web
-            dockerfile: apps/web/Dockerfile
-
+          - { image: server, dockerfile: apps/server/Dockerfile, platform: linux/amd64, runner: ubuntu-latest }
+          - { image: server, dockerfile: apps/server/Dockerfile, platform: linux/arm64, runner: ubuntu-24.04-arm }
+          - { image: web, dockerfile: apps/web/Dockerfile, platform: linux/amd64, runner: ubuntu-latest }
+          - { image: web, dockerfile: apps/web/Dockerfile, platform: linux/arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
-      # ghcr.io rejects an uppercase path, and this repository's owner has one.
-      # `${VAR,,}` is bash lowercasing; github.repository would push it verbatim.
-      - name: Resolve image name
-        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.name }}" >> "$GITHUB_ENV"
+      - name: Resolve names
+        run: |
+          echo "IMAGE=${REGISTRY}/${GITHUB_REPOSITORY,,}-${{ matrix.image }}" >> "$GITHUB_ENV"
+          echo "PLATFORM_KEY=${{ matrix.platform }}" | tr '/' '-' >> "$GITHUB_ENV"
 
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -53,10 +65,70 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE }}
-          # Three kinds on purpose. `latest` is what a copy-pasted compose file
-          # names; the semver pair lets someone pin a minor and still get
-          # patches; the sha is what you reach for when a release is bad and
-          # "which commit was that" is the only question that matters.
+
+      # Pushed by digest, not by tag: a tag can only point at one manifest, and
+      # the two architectures are not finished until the merge job says so.
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ env.PLATFORM_KEY }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ env.PLATFORM_KEY }}
+
+      # The filename is the bare digest, prefix stripped: the merge job rebuilds
+      # the reference as `image@sha256:<name>`, so leaving `sha256:` on would
+      # produce `image@sha256:sha256:…` and fail there rather than here.
+      - name: Hand the digest to the merge job
+        run: |
+          digest='${{ steps.build.outputs.digest }}'
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.image }}-${{ env.PLATFORM_KEY }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  # One manifest list per image, pointing at both architecture digests. This is
+  # what makes `docker pull` resolve to the right one on the puller's machine.
+  merge:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [server, web]
+    steps:
+      - name: Resolve name
+        run: echo "IMAGE=${REGISTRY}/${GITHUB_REPOSITORY,,}-${{ matrix.image }}" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ matrix.image }}-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # Three kinds on purpose. `latest` is what a copied compose file names;
+          # the semver pair lets someone pin a minor and still take patches; the
+          # sha is what you reach for when a release is bad and the only question
+          # is which commit it was.
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -64,19 +136,12 @@ jobs:
             type=raw,value=${{ inputs.tag }},enable=${{ inputs.tag != '' }}
             type=sha,format=long
 
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ${{ matrix.dockerfile }}
-          # arm64 matters more than it looks: a lot of cheap VPS stock is ARM
-          # now, and so is every Apple Silicon laptop running Docker. It is
-          # emulated here and slow — that cost is the point of doing it once in
-          # CI instead of on every self-hoster's machine.
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          # Layer cache in the Actions cache, so a release that only changed the
-          # web app does not rebuild the server's dependency install.
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - name: Create the manifest list
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "${IMAGE}@sha256:%s " *)
+
+      - name: Show what landed
+        run: docker buildx imagetools inspect "${IMAGE}:${{ steps.meta.outputs.version }}"

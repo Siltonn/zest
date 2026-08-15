@@ -47,7 +47,7 @@ docker compose up
 Then open <http://localhost:3000>.
 
 The images are on [GHCR](https://github.com/Siltonn/zest/pkgs/container/zest-server),
-built for amd64 and arm64. `pull` is optional — with no image available, compose builds
+built for amd64 and arm64, each on a runner of that architecture rather than under emulation. `pull` is optional — with no image available, compose builds
 the same Dockerfiles from this checkout, which is what you want if you are changing
 anything.
 
