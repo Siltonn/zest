@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Button, Separator, Spinner, Tooltip, toast } from "@heroui/react";
+import { Button, Chip, Separator, Spinner, Tooltip, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -195,10 +195,18 @@ export function AppShell({ children }: { children: ReactNode }) {
                     >
                       <item.icon className="size-[18px] shrink-0" />
                       {!collapsed && <span className="flex-1">{item.label}</span>}
+                      {/*
+                        A Chip, not a Badge. HeroUI's Badge is absolutely
+                        positioned to the top-right of the element it decorates,
+                        and this Link is not a positioned ancestor — so the
+                        inbox count escaped to the top-right corner of the page
+                        and sat there, alone, over nothing. The count wants to
+                        be inline at the end of the row anyway.
+                      */}
                       {!collapsed && count > 0 && (
-                        <Badge color="warning" size="sm" variant="soft">
+                        <Chip color="warning" size="sm" variant="soft">
                           {count}
-                        </Badge>
+                        </Chip>
                       )}
                     </Link>
                   );
