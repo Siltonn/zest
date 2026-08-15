@@ -228,7 +228,11 @@ export default function DashboardPage() {
                   {summary ? compactNumber(summary.impressions) : "—"}
                 </span>
               </div>
-              <div className="text-accent">
+              {/* `accent-soft-foreground`, not `accent`: the raw accent is a
+                  L=0.88 lemon, which measures 1.4:1 against the light page —
+                  a chart line nobody can see. This token is the accent already
+                  adjusted to sit on the page in either theme. */}
+              <div className="text-accent-soft-foreground">
                 <Sparkline points={data?.series.impressions ?? []} height={72} />
               </div>
             </div>
@@ -240,7 +244,11 @@ export default function DashboardPage() {
                   {summary ? compactNumber(summary.followers) : "—"}
                 </span>
               </div>
-              <div className="text-warning">
+              {/* Same colour as the series above on purpose. The two are
+                  stacked and separately labelled, never plotted on shared axes,
+                  so a second hue distinguished nothing and cost a colour that
+                  had to survive both themes. */}
+              <div className="text-accent-soft-foreground">
                 <Sparkline points={data?.series.followers ?? []} height={72} />
               </div>
             </div>
