@@ -88,7 +88,7 @@ export default function SignInPage() {
         </Card.Footer>
       </Card>
 
-      <p className="mt-4 text-center text-xs opacity-40">
+      <p className="mt-4 text-center text-xs opacity-55">
         Running the demo seed? Sign in as demo@zest.local / zestdemo
       </p>
     </div>

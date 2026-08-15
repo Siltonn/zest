@@ -78,7 +78,7 @@ export function PostDrawer({
                 key={index}
                 className="ml-4 mt-2 whitespace-pre-wrap rounded-xl border border-default-200/60 border-l-2 border-l-default-300 p-3 text-sm leading-relaxed"
               >
-                <span className="mb-1 block text-xs opacity-45">
+                <span className="mb-1 block text-xs opacity-55">
                   Part {index + 2} · published as a reply
                 </span>
                 {part}
@@ -165,7 +165,7 @@ export function PostDrawer({
                             {badge.label}
                           </span>
                         </div>
-                        <div className="text-xs opacity-40">
+                        <div className="text-xs opacity-55">
                           {relativeTime(entry.createdAt)} ·{" "}
                           {formatDateTime(entry.createdAt)}
                         </div>

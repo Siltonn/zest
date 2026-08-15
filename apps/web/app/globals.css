@@ -25,7 +25,108 @@ body {
   color: var(--foreground);
 }
 
+/*
+ * Theme, from the HeroUI theme builder.
+ *
+ *   oklch(0.8538 0.1396 131.16) — a bright yellow-green
+ *
+ * which is a happy accident for a project named after citrus zest, and the
+ * reason the two brand tokens below now sit *beside* the accent rather than
+ * fighting it.
+ *
+ * HeroUI v3 derives almost everything from a handful of roots: `-hover`,
+ * `-soft`, `-soft-foreground`, `-secondary` and `-tertiary` are all `color-mix`
+ * of a base token with `--foreground`. So overriding the roots re-tones the
+ * entire component set, and anything hand-written that reads `--accent` or
+ * `bg-default-*` follows along for free.
+ *
+ * Neutrals are `oklch(L 0 131.16)` — zero chroma, accent hue. That is what the
+ * builder's `base=0` means: greys that carry the accent's hue so they can be
+ * warmed later by raising chroma alone, without re-picking every step.
+ */
 :root {
+  /* The accent sits at L=0.85, so anything on top of it must be dark. White
+     text on this green is unreadable — the default `--accent-foreground` is
+     near-white, which is exactly the trap a light accent sets. */
+  --accent: oklch(0.8538 0.1396 131.16);
+  --accent-foreground: oklch(0.22 0.03 131.16);
+
+  --success: oklch(0.72 0.16 150);
+  --warning: oklch(0.8 0.15 78);
+  --danger: oklch(0.594 0.1967 9.91);
+
+  /* Radius Form: Large. */
+  --radius: 0.75rem;
+
+  /* Zest and Pomelo keep their own identities: the citrus mark and the
+     simulated network's fruit are brand, not interface state. */
   --zest-citrus: oklch(0.82 0.17 96);
   --zest-pomelo: oklch(0.72 0.16 25);
+}
+
+/* Light: the same hue, inverted lightness ramp. */
+:root:not(.dark) {
+  --background: oklch(0.99 0 131.16);
+  --foreground: oklch(0.18 0 131.16);
+  --surface: oklch(1 0 131.16);
+  --overlay: oklch(1 0 131.16);
+  --default: oklch(0.94 0 131.16);
+  --default-foreground: oklch(0.24 0 131.16);
+  --border: oklch(0.91 0 131.16);
+
+  /* The light accent's second trap, and subtler than the first. HeroUI derives
+     this as `mix(accent 70%, foreground 30%)` — tuned for a mid-lightness
+     accent, where 30% of a dark foreground is enough to darken it into legible
+     text. Ours starts at L=0.854, so that mix only reaches L≈0.65, and every
+     `variant="secondary"` button paints its label in it: ~3.3:1 on the chip it
+     sits on. Pushed to L=0.42, which is ~6.5:1 and still visibly the accent
+     rather than black. Dark mode needs no such help — there the same formula
+     mixes toward a light foreground and lands well clear. */
+  --accent-soft-foreground: oklch(0.42 0.09 131.16);
+}
+
+/* Dark: the builder's own ramp — near-black page, layered greys above it. */
+.dark {
+  --background: oklch(0.12 0 131.16);
+  --foreground: oklch(0.97 0 131.16);
+  --surface: oklch(0.15 0 131.16);
+  --overlay: oklch(0.15 0 131.16);
+  --default: oklch(0.2103 0 131.16);
+  --default-foreground: oklch(0.95 0 131.16);
+  --border: oklch(0.274 0 131.16);
+}
+
+/*
+ * The numbered neutral ramp — which HeroUI v3 does not ship.
+ *
+ * v2 had `default-50…900`; v3 replaced it with named roots (`--default`,
+ * `--default-hover`, `--surface-secondary`, `--muted`). 69 call sites here were
+ * written from v2 muscle memory, and Tailwind emits an unknown colour as
+ * nothing at all — so `bg-default-100`, `border-default-200` and
+ * `divide-default-200` have been rendering *fully transparent* in both themes
+ * since they were written. Dark mode hid it perfectly: a transparent panel over
+ * a near-black page still looks like the subtle fill that was intended. On
+ * white it showed up immediately — the selected nav item had no highlight.
+ *
+ * Defining the ramp rather than rewriting the call sites, because the call
+ * sites are not wrong: they want two distinct weights of "subtle", and the
+ * named roots only offer one.
+ *
+ * Each step is a mix toward `--foreground`, never a fixed lightness, which is
+ * what lets one definition serve both themes — foreground is dark on light and
+ * light on dark, so "more foreground" means "more contrast" in both directions.
+ * `inline` matters: it pastes the color-mix into each utility, so the steps
+ * re-resolve when the theme class flips instead of freezing at build time.
+ */
+@theme inline {
+  --color-default-50: color-mix(in oklab, var(--default) 40%, var(--surface));
+  --color-default-100: color-mix(in oklab, var(--default) 70%, var(--surface));
+  --color-default-200: var(--default);
+  --color-default-300: color-mix(in oklab, var(--default) 92%, var(--foreground));
+  --color-default-400: color-mix(in oklab, var(--default) 78%, var(--foreground));
+  --color-default-500: color-mix(in oklab, var(--default) 60%, var(--foreground));
+  --color-default-600: color-mix(in oklab, var(--default) 45%, var(--foreground));
+  --color-default-700: color-mix(in oklab, var(--default) 30%, var(--foreground));
+  --color-default-800: color-mix(in oklab, var(--default) 18%, var(--foreground));
+  --color-default-900: color-mix(in oklab, var(--default) 8%, var(--foreground));
 }

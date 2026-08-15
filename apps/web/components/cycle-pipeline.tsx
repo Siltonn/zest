@@ -112,7 +112,7 @@ export function CyclePipeline({
     <div className="space-y-2">
       {stages.map((stage, index) => (
         <div key={stage.role}>
-          <div className="mb-1 flex items-center gap-1.5 text-xs opacity-45">
+          <div className="mb-1 flex items-center gap-1.5 text-xs opacity-55">
             <span>{ROLE_META[stage.role]?.icon}</span>
             <span className="font-medium">{ROLE_META[stage.role]?.label}</span>
             {/* The count is the point of the drawing: one research, many writers. */}
@@ -184,7 +184,7 @@ function RunChip({
           {run.status}
         </Chip>
       </div>
-      <div className="text-xs opacity-40">
+      <div className="text-xs opacity-55">
         {run.trigger.replace(/_/g, " ")} · {relativeTime(run.startedAt)}
       </div>
     </button>

@@ -1,21 +1,67 @@
 import type { Actor, PostStatus } from "./api";
 
-/** Status presentation, shared by the calendar, inbox and post drawer. */
+/**
+ * Status presentation, shared by the calendar, inbox and post drawer.
+ *
+ * Fixed hues rather than theme tokens on purpose: this is a categorical scale —
+ * amber means waiting, blue means scheduled, green means out the door — and
+ * recolouring it with the accent would collapse eight distinguishable states
+ * into eight shades of one. It is the one place in the UI that should *not*
+ * follow the theme.
+ *
+ * The step, though, has to, and one step cannot serve both grounds. A flat
+ * `-600` failed at both ends: blue hit 3.9:1 and violet 3.4:1 on the dark page,
+ * while on white the bright hues fell over instead — amber 3.1:1, orange 3.5:1,
+ * emerald 3.6:1. These are small labels, so the bar is 4.5:1. The `-700`/`-400`
+ * pair clears it for every hue in both themes (worst case 4.7:1). The settled
+ * states keep zinc-500 — they are meant to recede, and already clear the bar.
+ *
+ * Dots keep a single step: decorative shapes are held to 3:1, and the label
+ * beside them carries the meaning anyway for anyone who cannot separate hues.
+ */
 export const STATUS_META: Record<
   PostStatus,
   { label: string; color: string; dot: string }
 > = {
-  draft: { label: "Draft", color: "text-zinc-500", dot: "bg-zinc-400" },
-  pending_approval: { label: "Needs review", color: "text-amber-600", dot: "bg-amber-500" },
-  needs_changes: { label: "Rework", color: "text-orange-600", dot: "bg-orange-500" },
-  approved: { label: "Approved", color: "text-sky-600", dot: "bg-sky-500" },
-  scheduled: { label: "Scheduled", color: "text-blue-600", dot: "bg-blue-500" },
-  publishing: { label: "Publishing", color: "text-violet-600", dot: "bg-violet-500" },
-  published: { label: "Published", color: "text-emerald-600", dot: "bg-emerald-500" },
-  failed: { label: "Failed", color: "text-red-600", dot: "bg-red-500" },
-  rejected: { label: "Rejected", color: "text-zinc-400", dot: "bg-zinc-300" },
-  expired: { label: "Expired", color: "text-zinc-400", dot: "bg-zinc-300" },
-  canceled: { label: "Canceled", color: "text-zinc-400", dot: "bg-zinc-300" },
+  draft: { label: "Draft", color: "text-zinc-500 dark:text-zinc-400", dot: "bg-zinc-400" },
+  pending_approval: {
+    label: "Needs review",
+    color: "text-amber-700 dark:text-amber-400",
+    dot: "bg-amber-500",
+  },
+  needs_changes: {
+    label: "Rework",
+    color: "text-orange-700 dark:text-orange-400",
+    dot: "bg-orange-500",
+  },
+  approved: { label: "Approved", color: "text-sky-700 dark:text-sky-400", dot: "bg-sky-500" },
+  scheduled: {
+    label: "Scheduled",
+    color: "text-blue-700 dark:text-blue-400",
+    dot: "bg-blue-500",
+  },
+  publishing: {
+    label: "Publishing",
+    color: "text-violet-700 dark:text-violet-400",
+    dot: "bg-violet-500",
+  },
+  published: {
+    label: "Published",
+    color: "text-emerald-700 dark:text-emerald-400",
+    dot: "bg-emerald-500",
+  },
+  failed: { label: "Failed", color: "text-red-700 dark:text-red-400", dot: "bg-red-500" },
+  rejected: {
+    label: "Rejected",
+    color: "text-zinc-500 dark:text-zinc-400",
+    dot: "bg-zinc-300",
+  },
+  expired: { label: "Expired", color: "text-zinc-500 dark:text-zinc-400", dot: "bg-zinc-300" },
+  canceled: {
+    label: "Canceled",
+    color: "text-zinc-500 dark:text-zinc-400",
+    dot: "bg-zinc-300",
+  },
 };
 
 /** Who did it, in words — the audit trail is meant to be read, not decoded. */
@@ -34,18 +80,22 @@ export function describeActor(actor: Actor): string {
   }
 }
 
+/** Five actor kinds, five hues — same categorical reasoning as `STATUS_META`. */
 export function actorBadge(actor: Actor): { label: string; color: string } {
   switch (actor.kind) {
     case "human":
-      return { label: "human", color: "bg-sky-500/15 text-sky-600" };
+      return { label: "human", color: "bg-sky-500/15 text-sky-700 dark:text-sky-400" };
     case "agent":
-      return { label: actor.role ?? "agent", color: "bg-violet-500/15 text-violet-600" };
+      return {
+        label: actor.role ?? "agent",
+        color: "bg-violet-500/15 text-violet-700 dark:text-violet-400",
+      };
     case "system":
-      return { label: "system", color: "bg-zinc-500/15 text-zinc-500" };
+      return { label: "system", color: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-400" };
     case "mcp":
-      return { label: "mcp", color: "bg-emerald-500/15 text-emerald-600" };
+      return { label: "mcp", color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" };
     case "api":
-      return { label: "api", color: "bg-amber-500/15 text-amber-600" };
+      return { label: "api", color: "bg-amber-500/15 text-amber-700 dark:text-amber-400" };
   }
 }
 

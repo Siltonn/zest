@@ -452,7 +452,7 @@ function PlanCard({
                         <div
                           key={item.id}
                           className={`rounded-lg border border-default-200/60 px-3 py-2 text-sm ${
-                            item.status === "skipped" ? "opacity-40 line-through" : ""
+                            item.status === "skipped" ? "opacity-55 line-through" : ""
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -461,7 +461,7 @@ function PlanCard({
                               {item.angle && (
                                 <div className="text-xs opacity-60">{item.angle}</div>
                               )}
-                              <div className="mt-0.5 text-xs opacity-45">
+                              <div className="mt-0.5 text-xs opacity-55">
                                 {item.suggestedSlotAt
                                   ? formatDateTime(item.suggestedSlotAt)
                                   : "no slot"}

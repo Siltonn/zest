@@ -166,9 +166,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         <nav className="flex-1 overflow-y-auto px-3 pb-2">
           {GROUPS.map((group, index) => (
             <div key={group.label}>
-              {index > 0 && <Separator className="my-3 opacity-40" />}
+              {index > 0 && <Separator className="my-3 opacity-55" />}
               {!collapsed && (
-                <div className="px-2 pb-1 pt-1 text-xs font-medium opacity-40">
+                <div className="px-2 pb-1 pt-1 text-xs font-medium opacity-55">
                   {group.label}
                 </div>
               )}
@@ -215,7 +215,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
 
         <div className="space-y-2 px-3 pb-3">
-          <Separator className="opacity-40" />
+          <Separator className="opacity-55" />
           <UserMenu collapsed={collapsed} />
           <Tooltip delay={300}>
             <Tooltip.Trigger>
@@ -238,7 +238,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Tooltip.Content>
           </Tooltip>
           {!collapsed && (
-            <div className="flex items-center gap-1.5 px-1 text-xs opacity-45">
+            <div className="flex items-center gap-1.5 px-1 text-xs opacity-55">
               <span
                 className={`size-1.5 rounded-full ${
                   connected ? "bg-success" : "bg-default-400"
@@ -265,7 +265,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm">
             {section && (
               <>
-                <span className="opacity-45">{section.label}</span>
+                <span className="opacity-55">{section.label}</span>
                 <span className="opacity-25">/</span>
               </>
             )}
@@ -291,7 +291,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {activity.length > 0 && (
               <aside className="hidden w-60 shrink-0 2xl:block">
                 <div className="sticky top-0">
-                  <div className="mb-2 text-xs font-medium opacity-40">Activity</div>
+                  <div className="mb-2 text-xs font-medium opacity-55">Activity</div>
                   <div className="space-y-2.5">
                     {activity.slice(0, 12).map((item) => (
                       <div key={item.id} className="text-sm">

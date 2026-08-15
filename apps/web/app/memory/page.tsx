@@ -196,7 +196,7 @@ export default function MemoryPage() {
           </Card.Content>
 
           {doc && (
-            <Card.Footer className="text-xs opacity-40">
+            <Card.Footer className="text-xs opacity-55">
               Last changed by {describeActor(doc.updatedByActor)} ·{" "}
               {relativeTime(doc.createdAt)}
             </Card.Footer>

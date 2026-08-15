@@ -57,13 +57,18 @@ export function Segmented<T extends string>({
             // prop: HeroUI types `className` as a string, and the attributes
             // carry hover and press states the render prop would not.
             className={[
-              "relative cursor-pointer select-none rounded-lg outline-none",
+              "group relative cursor-pointer select-none whitespace-nowrap rounded-lg outline-none",
               "transition-[opacity,transform,color] duration-150 ease-out",
               pad,
               // The indicator paints the selected surface, so the label only
-              // changes weight and colour — otherwise a solid box appears
-              // instantly and hides the slide underneath it.
-              "opacity-60 data-[selected]:font-medium data-[selected]:opacity-100",
+              // changes colour — otherwise a solid box appears instantly and
+              // hides the slide underneath it.
+              //
+              // 75 rather than the 60 used for muted text elsewhere: these
+              // labels sit on the track, which is lighter than the page, so the
+              // same opacity buys less contrast here — measured 3.3:1 at 60,
+              // and an unselected tab is a control you have to be able to read.
+              "opacity-75 data-[selected]:text-accent-soft-foreground data-[selected]:opacity-100",
               "data-[hovered]:opacity-100",
               // A small press response makes the control feel physical without
               // moving the layout.
@@ -71,9 +76,26 @@ export function Segmented<T extends string>({
               "data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent/50",
             ].join(" ")}
           >
-            {/* Under the label: the shared element that slides between tabs. */}
-            <Tabs.Indicator className="absolute inset-0 -z-10 rounded-lg bg-[var(--background)] shadow-sm ring-1 ring-default-200/60" />
-            <span className="relative">{option.label}</span>
+            {/* Under the label: the shared element that slides between tabs.
+                Tinted with the accent rather than raised as a lighter pill —
+                at this theme's lightness a "raised" surface in dark mode ends
+                up darker than the track it sits on. */}
+            <Tabs.Indicator className="absolute inset-0 -z-10 rounded-lg bg-accent-soft ring-1 ring-accent/25" />
+
+            {/*
+              Selection bolds the label, and a bold label is wider — enough that
+              "30 days" stopped fitting its equal-width tab and wrapped onto two
+              lines. A hidden bold copy reserves the wider measurement always,
+              so switching tabs changes weight without moving anything.
+            */}
+            <span className="relative block">
+              <span aria-hidden className="invisible block font-medium">
+                {option.label}
+              </span>
+              <span className="absolute inset-0 flex items-center justify-center group-data-[selected]:font-medium">
+                {option.label}
+              </span>
+            </span>
           </Tabs.Tab>
         ))}
       </Tabs.List>

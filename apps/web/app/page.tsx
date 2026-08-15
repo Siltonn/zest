@@ -228,11 +228,11 @@ export default function DashboardPage() {
                   {summary ? compactNumber(summary.impressions) : "—"}
                 </span>
               </div>
-              <div className="text-sky-500">
+              <div className="text-accent">
                 <Sparkline points={data?.series.impressions ?? []} height={72} />
               </div>
             </div>
-            <Separator className="opacity-40" />
+            <Separator className="opacity-55" />
             <div>
               <div className="mb-1 flex justify-between text-xs">
                 <span className="opacity-50">Followers</span>
@@ -240,7 +240,7 @@ export default function DashboardPage() {
                   {summary ? compactNumber(summary.followers) : "—"}
                 </span>
               </div>
-              <div className="text-emerald-500">
+              <div className="text-warning">
                 <Sparkline points={data?.series.followers ?? []} height={72} />
               </div>
             </div>
@@ -304,7 +304,7 @@ export default function DashboardPage() {
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm">{post.content.text}</p>
-                      <p className="text-xs opacity-40">
+                      <p className="text-xs opacity-55">
                         @{post.account.handle} ·{" "}
                         {post.scheduledAt ? relativeTime(post.scheduledAt) : ""}
                       </p>
@@ -380,7 +380,7 @@ export default function DashboardPage() {
       )}
 
       {workspace && (
-        <p className="text-xs opacity-40">
+        <p className="text-xs opacity-55">
           Pomelo time is {formatDateTime(workspace.simNow)}. The simulated clock runs
           ahead so a day of engagement plays out in seconds.
         </p>
@@ -409,7 +409,7 @@ function Stat({
             {value}
           </div>
         )}
-        {hint && <div className="mt-1 text-xs opacity-40">{hint}</div>}
+        {hint && <div className="mt-1 text-xs opacity-55">{hint}</div>}
       </Card.Content>
     </Card>
   );

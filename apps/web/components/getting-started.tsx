@@ -77,7 +77,7 @@ export function GettingStarted() {
               <div className="min-w-0 flex-1">
                 <div
                   className={`text-sm font-medium ${
-                    step.done ? "opacity-45 line-through" : ""
+                    step.done ? "opacity-55 line-through" : ""
                   }`}
                 >
                   {step.title}

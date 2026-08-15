@@ -191,7 +191,7 @@ export default function AccountsPage() {
                   </Button>
                 </div>
                 {connect.isError && (
-                  <p className="text-sm text-red-500">
+                  <p className="text-sm text-danger">
                     {(connect.error as Error).message}
                   </p>
                 )}

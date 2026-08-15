@@ -137,7 +137,7 @@ export default function AutonomyPage() {
                         <span
                           className={
                             rule.mode === "auto"
-                              ? "font-medium text-emerald-600"
+                              ? "font-medium text-success"
                               : "opacity-70"
                           }
                         >
@@ -148,7 +148,7 @@ export default function AutonomyPage() {
                           {rule.conditions?.sentiment &&
                             ` · ${rule.conditions.sentiment} only`}
                         </span>
-                        <div className="text-xs opacity-40">
+                        <div className="text-xs opacity-55">
                           granted {relativeTime(rule.grantedAt)}
                         </div>
                       </div>

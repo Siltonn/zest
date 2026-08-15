@@ -152,7 +152,7 @@ export default function AuditPage() {
         <div className="space-y-4">
           {days.map(({ day, entries: dayEntries }) => (
             <section key={day}>
-              <h2 className="sticky top-0 z-10 mb-1.5 bg-[var(--background)]/90 py-1 text-xs font-medium uppercase tracking-wide opacity-45 backdrop-blur">
+              <h2 className="sticky top-0 z-10 mb-1.5 bg-[var(--background)]/90 py-1 text-xs font-medium uppercase tracking-wide opacity-55 backdrop-blur">
                 {formatDay(day)}
                 <span className="ml-2 font-normal normal-case tabular-nums opacity-70">
                   {dayEntries.length}
@@ -183,7 +183,7 @@ export default function AuditPage() {
             </div>
           )}
           {!hasNextPage && (
-            <p className="pt-1 text-center text-xs opacity-40">
+            <p className="pt-1 text-center text-xs opacity-55">
               That is the whole history.
             </p>
           )}
@@ -219,7 +219,7 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
         {entry.toStatus && (
           <span className="opacity-55"> → {entry.toStatus.replace(/_/g, " ")}</span>
         )}
-        <div className="mt-0.5 text-xs opacity-45">
+        <div className="mt-0.5 text-xs opacity-55">
           {describeActor(entry.actor)}
           {entry.agentRunId && (
             <>
@@ -235,7 +235,7 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
         </div>
       </div>
 
-      <span className="shrink-0 whitespace-nowrap text-xs tabular-nums opacity-40">
+      <span className="shrink-0 whitespace-nowrap text-xs tabular-nums opacity-55">
         {relativeTime(entry.createdAt)}
       </span>
     </li>

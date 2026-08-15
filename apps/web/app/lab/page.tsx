@@ -184,7 +184,7 @@ export default function LabPage() {
                   <div
                     key={variant.id}
                     className={`rounded-lg border p-3 ${
-                      won ? "border-emerald-500/50 bg-emerald-500/5" : "border-default-200/60"
+                      won ? "border-success/50 bg-success/5" : "border-default-200/60"
                     }`}
                   >
                     <div className="mb-1 flex items-center gap-2">
@@ -233,7 +233,7 @@ export default function LabPage() {
           )}
 
           {test.isError && (
-            <p className="text-sm text-red-500">{(test.error as Error).message}</p>
+            <p className="text-sm text-danger">{(test.error as Error).message}</p>
           )}
         </Card.Content>
       </Card>
@@ -285,7 +285,7 @@ export default function LabPage() {
                   {item.trigger.keywords && ` matching ${item.trigger.keywords.join(", ")}`}
                 </span>
                 {item.template && (
-                  <div className="text-xs opacity-40">"{item.template}"</div>
+                  <div className="text-xs opacity-55">"{item.template}"</div>
                 )}
               </div>
               <Button

@@ -121,14 +121,14 @@ export default function PomeloPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-x-1.5 text-sm">
                           <span className="font-medium">{post.author.displayName}</span>
-                          <span className="opacity-40">@{post.author.handle}</span>
+                          <span className="opacity-55">@{post.author.handle}</span>
                           {!post.author.isPersona && (
                             <Chip size="sm" variant="soft" color="warning">
                               you
                             </Chip>
                           )}
                           <span className="opacity-30">·</span>
-                          <span className="opacity-40">
+                          <span className="opacity-55">
                             {relativeTime(post.createdAt)}
                           </span>
                         </div>
@@ -165,7 +165,7 @@ export default function PomeloPage() {
                 <div key={trend.topic}>
                   <div className="flex justify-between text-sm">
                     <span className="truncate">{trend.topic}</span>
-                    <span className="shrink-0 tabular-nums opacity-40">
+                    <span className="shrink-0 tabular-nums opacity-55">
                       {trend.momentum}
                     </span>
                   </div>
@@ -191,7 +191,7 @@ export default function PomeloPage() {
             <Card.Content className="max-h-[26rem] space-y-3 overflow-y-auto">
               {residents.map((person, index) => (
                 <div key={person.handle}>
-                  {index > 0 && <Separator className="mb-3 opacity-40" />}
+                  {index > 0 && <Separator className="mb-3 opacity-55" />}
                   <Tooltip>
                     <Tooltip.Trigger>
                       <div className="flex cursor-help gap-2.5 text-left">
@@ -203,7 +203,7 @@ export default function PomeloPage() {
                         </Avatar>
                         <div className="min-w-0 text-xs">
                           <div className="truncate font-medium">{person.displayName}</div>
-                          <div className="truncate opacity-40">
+                          <div className="truncate opacity-55">
                             {person.personaConfig?.archetype.replace(/_/g, " ")} ·{" "}
                             {compactNumber(person.followerCount)} followers
                           </div>

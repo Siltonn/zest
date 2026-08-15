@@ -93,7 +93,7 @@ export default function PomeloPostPage({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="font-medium">{post.author.displayName}</span>
-                <span className="opacity-40">@{post.author.handle}</span>
+                <span className="opacity-55">@{post.author.handle}</span>
                 {!post.author.isPersona && (
                   <Chip size="sm" variant="soft" color="warning">
                     you
@@ -103,7 +103,7 @@ export default function PomeloPostPage({
               <p className="mt-2 whitespace-pre-wrap text-[17px] leading-relaxed">
                 {post.text}
               </p>
-              <div className="mt-1 text-xs opacity-40">
+              <div className="mt-1 text-xs opacity-55">
                 {relativeTime(post.createdAt)}
               </div>
             </div>
@@ -138,9 +138,9 @@ export default function PomeloPostPage({
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 text-sm">
                       <span className="font-medium">{reply.author.displayName}</span>
-                      <span className="opacity-40">@{reply.author.handle}</span>
+                      <span className="opacity-55">@{reply.author.handle}</span>
                       <span className="opacity-30">·</span>
-                      <span className="opacity-40">{relativeTime(reply.createdAt)}</span>
+                      <span className="opacity-55">{relativeTime(reply.createdAt)}</span>
                     </div>
                     <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed">
                       {reply.text}

@@ -140,7 +140,7 @@ export default function CalendarPage() {
                 "Saturday",
                 "Sunday",
               ].map((name) => (
-                <div key={name} className="px-1 text-xs font-medium opacity-45">
+                <div key={name} className="px-1 text-xs font-medium opacity-55">
                   <span className="hidden xl:inline">{name}</span>
                   <span className="xl:hidden">{name.slice(0, 3)}</span>
                 </div>

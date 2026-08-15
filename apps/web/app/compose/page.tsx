@@ -132,7 +132,7 @@ export default function ComposePage() {
                 Undo polish
               </Button>
             )}
-            <span className="text-xs opacity-45">
+            <span className="text-xs opacity-55">
               Rewrites your draft in this account's voice — your point stays yours.
             </span>
           </div>
@@ -148,7 +148,7 @@ export default function ComposePage() {
                   </span>
                   <div className="flex items-center gap-2">
                     <span
-                      className={`text-xs ${partOver ? "text-danger" : "opacity-45"}`}
+                      className={`text-xs ${partOver ? "text-danger" : "opacity-55"}`}
                     >
                       {partLength}/{limit}
                     </span>
@@ -238,7 +238,7 @@ export default function ComposePage() {
           />
 
           <div className="flex items-center justify-between text-sm">
-            <span className={over ? "font-medium text-red-500" : "opacity-50"}>
+            <span className={over ? "font-medium text-danger" : "opacity-50"}>
               {length} / {limit}
               {over && ` — ${length - limit} over`}
             </span>
@@ -267,7 +267,7 @@ export default function ComposePage() {
             {when ? "Schedule" : "Save to queue"}
           </Button>
           {create.isError && (
-            <span className="self-center text-sm text-red-500">
+            <span className="self-center text-sm text-danger">
               {(create.error as Error).message}
             </span>
           )}
@@ -288,7 +288,7 @@ export default function ComposePage() {
               <div className="min-w-0">
                 <div className="text-sm">
                   <span className="font-medium">{account.displayName}</span>{" "}
-                  <span className="opacity-40">@{account.handle}</span>
+                  <span className="opacity-55">@{account.handle}</span>
                 </div>
                 <p className="mt-1 whitespace-pre-wrap text-[15px] leading-relaxed">
                   {text}

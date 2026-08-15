@@ -244,8 +244,8 @@ export default function SettingsPage() {
         </Card.Header>
         <Card.Content className="space-y-3">
           {newKey && (
-            <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-sm">
-              <div className="font-medium text-emerald-700">
+            <div className="rounded-lg bg-success/10 px-3 py-2 text-sm">
+              <div className="font-medium text-success">
                 Copy this now — it is not shown again.
               </div>
               <code className="mt-1 block break-all text-xs">{newKey}</code>

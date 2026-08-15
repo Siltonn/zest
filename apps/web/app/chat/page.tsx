@@ -109,10 +109,10 @@ export default function ChatPage() {
           New conversation
         </Button>
 
-        <div className="mb-2 px-1 text-xs font-medium opacity-40">Recent</div>
+        <div className="mb-2 px-1 text-xs font-medium opacity-55">Recent</div>
         <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
           {history.length === 0 && (
-            <p className="px-1 text-xs opacity-40">Nothing yet.</p>
+            <p className="px-1 text-xs opacity-55">Nothing yet.</p>
           )}
           {history.map((item) => (
             <button
@@ -126,7 +126,7 @@ export default function ChatPage() {
               }`}
             >
               <div className="truncate">{item.title}</div>
-              <div className="text-xs opacity-45">{relativeTime(item.updatedAt)}</div>
+              <div className="text-xs opacity-55">{relativeTime(item.updatedAt)}</div>
             </button>
           ))}
         </div>
@@ -184,7 +184,7 @@ export default function ChatPage() {
               className="border-0 bg-transparent"
             />
             <div className="flex items-center justify-between px-1 pt-1">
-              <span className="text-xs opacity-40">
+              <span className="text-xs opacity-55">
                 Anything it proposes still needs your approval
               </span>
               <Button
@@ -275,7 +275,7 @@ function MessageRow({ message }: { message: Message }) {
         {message.agentRunId && (
           <a
             href={`/team?run=${message.agentRunId}`}
-            className="mt-2 inline-block text-xs underline opacity-40 hover:opacity-70"
+            className="mt-2 inline-block text-xs underline opacity-55 hover:opacity-70"
           >
             See the full run
           </a>

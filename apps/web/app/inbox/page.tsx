@@ -431,7 +431,7 @@ function PlanItems({
       {item.body && <p className="text-sm opacity-60">{item.body}</p>}
       {[...byAccount.entries()].map(([handle, entries]) => (
         <div key={handle}>
-          <div className="mb-1 text-xs font-medium uppercase tracking-wide opacity-45">
+          <div className="mb-1 text-xs font-medium uppercase tracking-wide opacity-55">
             @{handle}
           </div>
           <div className="space-y-1">
@@ -439,7 +439,7 @@ function PlanItems({
               <div
                 key={entry.id}
                 className={`flex items-start justify-between gap-3 rounded-lg border border-default-200/60 px-3 py-2 ${
-                  dropped.has(entry.id) ? "opacity-40 line-through" : ""
+                  dropped.has(entry.id) ? "opacity-55 line-through" : ""
                 }`}
               >
                 <div className="min-w-0">
@@ -448,7 +448,7 @@ function PlanItems({
                     <div className="text-xs opacity-60">{entry.angle}</div>
                   )}
                   {entry.suggestedSlotAt && (
-                    <div className="mt-0.5 text-xs opacity-40">
+                    <div className="mt-0.5 text-xs opacity-55">
                       {formatDateTime(entry.suggestedSlotAt)}
                     </div>
                   )}
