@@ -14,3 +14,10 @@ coverage/
 
 # uploaded images
 media/
+
+# Working notes, not product documentation. The demo script is written in
+# presenter voice ("point out that…", "show it on /team") and the competitive
+# teardown names another open-source project's weaknesses — neither belongs in
+# a public repo, and both are still useful locally.
+docs/demo.md
+docs/competitive-postiz.md

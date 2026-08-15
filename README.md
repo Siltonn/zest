@@ -11,7 +11,7 @@ review, no per-post API billing, no waiting.
 
 > **Status: feature-complete and verified end to end.** A post scheduled through the UI
 > publishes to Pomelo over HTTP, a simulated day produces believable engagement, and that
-> engagement flows back into analytics and the reply queue. See [the demo script](docs/demo.md).
+> engagement flows back into analytics and the reply queue.
 
 ## Why not just another scheduler
 
@@ -140,9 +140,6 @@ Design decisions and the arguments behind them are recorded in [`docs/adr/`](doc
 - [004 — Plans and fan-out](docs/adr/004-plans-and-fan-out.md): why cadence belongs to a
   plan rather than a workspace or an account, and what one-run-per-voice buys
 
-There is also an [eight-minute demo script](docs/demo.md), and a
-[code-level comparison against Postiz](docs/competitive-postiz.md) — the largest
-project in the space — with every claim about their code verified by reading it.
 
 ## Drive it from Claude Desktop
 
