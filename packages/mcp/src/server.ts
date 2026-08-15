@@ -357,7 +357,7 @@ export function createZestMcpServer(context: McpContext): McpServer {
       inputSchema: { limit: z.number().int().min(1).max(50).default(20) },
     },
     async ({ limit }) => {
-      const entries = await audit.listAudit(db, workspaceId, { limit });
+      const { entries } = await audit.listAudit(db, workspaceId, { limit });
       return {
         content: [
           {

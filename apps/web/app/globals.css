@@ -1,4 +1,12 @@
 @import "tailwindcss";
+
+/* Wired to the next/font variables set on <html>; see app/layout.tsx for why
+   Inter and not a geometric display face. */
+@theme {
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
 @import "@heroui/styles/css";
 
 /* HeroUI publishes dark values under .dark / [data-theme="dark"] and does not

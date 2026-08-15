@@ -350,16 +350,19 @@ export class WorkspaceController {
     @Req() req: AuthedRequest,
     @Query("entityType") entityType?: string,
     @Query("actorKind") actorKind?: string,
+    @Query("before") before?: string,
   ) {
-    const [entries, breakdown] = await Promise.all([
+    const [page, breakdown, entityTypes] = await Promise.all([
       audit.listAudit(this.db, req.workspaceId, {
         entityType,
         actorKind: actorKind as never,
-        limit: 200,
+        before: before ? new Date(before) : undefined,
+        limit: 50,
       }),
       audit.actorBreakdown(this.db, req.workspaceId),
+      audit.entityTypes(this.db, req.workspaceId),
     ]);
-    return { entries, breakdown };
+    return { ...page, breakdown, entityTypes };
   }
 
   @Get("runs")

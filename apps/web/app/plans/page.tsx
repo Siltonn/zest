@@ -17,7 +17,7 @@ import Link from "next/link";
 import { useState, type ChangeEvent } from "react";
 import { api, type Account } from "@/lib/api";
 import { ConfirmButton } from "@/components/confirm-button";
-import { Segmented } from "@/components/segmented";
+import { ChoiceField } from "@/components/choice-field";
 import { formatDateTime, relativeTime } from "@/lib/format";
 
 /**
@@ -198,20 +198,24 @@ function PlanForm({
         </div>
 
         <div>
-          <Label className="mb-1.5 block text-sm font-medium">What kind of programme</Label>
-          <Segmented
+          <ChoiceField
+            label="What kind of programme"
             value={kind}
-            onChange={(value) => setKind(value as "fresh" | "evergreen")}
+            onChange={(value) => setKind(value)}
             options={[
-              { id: "fresh", label: "Fresh content" },
-              { id: "evergreen", label: "Evergreen re-runs" },
+              { id: "fresh", label: "Fresh content", description: "Research → plan → write" },
+              {
+                id: "evergreen",
+                label: "Evergreen re-runs",
+                description: "Re-propose what already worked",
+              },
             ]}
+            hint={
+              kind === "fresh"
+                ? "Runs on this cadence and needs a model key."
+                : "Re-proposes each account's best published post that has rested 30 days. Measured, not generated — works with no model key, and still goes through your inbox."
+            }
           />
-          <p className="mt-1 text-xs opacity-50">
-            {kind === "fresh"
-              ? "Research → plan → write, on this cadence. Needs a model key."
-              : "Re-proposes each account's best published post that has rested 30 days. Measured, not generated — works with no model key, and still goes through your inbox."}
-          </p>
         </div>
 
         {kind === "fresh" && (
@@ -232,8 +236,12 @@ function PlanForm({
         )}
 
         <div>
-          <Label className="mb-1.5 block text-sm font-medium">Cadence</Label>
-          <Segmented value={schedule} onChange={setSchedule} options={CADENCES} />
+          <ChoiceField
+            label="Cadence"
+            value={schedule}
+            onChange={setSchedule}
+            options={CADENCES}
+          />
         </div>
 
         <div>
