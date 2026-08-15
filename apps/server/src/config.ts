@@ -24,6 +24,17 @@ const envSchema = z.object({
     .string()
     .default("false")
     .transform((v) => v === "true" || v === "1"),
+  /**
+   * Apply pending migrations at startup. On by default: an image that upgrades
+   * itself is the difference between `docker compose pull && up` and a support
+   * thread. Operators who run migrations from a deploy pipeline can turn it off
+   * — the server then refuses to start on an out-of-date schema rather than
+   * running against one.
+   */
+  AUTO_MIGRATE: z
+    .string()
+    .default("true")
+    .transform((v) => v !== "false" && v !== "0"),
   MAIL_PROVIDER: z.enum(["resend", "smtp", "console"]).default("console"),
   RESEND_API_KEY: z.string().optional(),
   // One key, every model, and a spend cap — the easiest way to try Zest

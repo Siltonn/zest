@@ -22,7 +22,8 @@
     "generate": "drizzle-kit generate",
     "migrate": "drizzle-kit migrate",
     "push": "drizzle-kit push",
-    "studio": "drizzle-kit studio"
+    "studio": "drizzle-kit studio",
+    "migrate:run": "node dist/migrate.js"
   },
   "dependencies": {
     "@zest/shared": "workspace:*",
@@ -33,5 +34,9 @@
     "@types/node": "^22.10.2",
     "drizzle-kit": "^0.31.10",
     "typescript": "^5.7.2"
-  }
+  },
+  "files": [
+    "dist",
+    "migrations"
+  ]
 }

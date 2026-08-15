@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import express from "express";
 import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
+import { closeDatabase, createDatabase, migrateToLatest } from "@zest/db";
 import { AppModule } from "./app.module.js";
 import { loadEnv, runsApi } from "./config.js";
 import { mountBullBoard } from "./queue/bull-board.js";
@@ -11,6 +12,32 @@ import { DomainErrorFilter } from "./api/domain-error.filter.js";
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
   const logger = new Logger("Bootstrap");
+
+  /*
+   * Migrate before the app is constructed, not after.
+   *
+   * Nest instantiates repeatable-job registrars and the webhook dispatcher as
+   * it builds the module graph, and those query immediately. Migrating after
+   * that means the first tick can hit a table the migration is still creating —
+   * so the schema is settled before anything is allowed to look at it.
+   *
+   * A failure here aborts the boot on purpose. A server that starts on a schema
+   * it does not match will fail later, somewhere less obvious, on whichever
+   * code path runs first.
+   */
+  if (env.AUTO_MIGRATE) {
+    const db = createDatabase(env.DATABASE_URL, { max: 1 });
+    try {
+      await migrateToLatest(db, { logger: (m) => logger.log(`migrate: ${m}`) });
+      logger.log("migrate: schema is up to date");
+    } catch (error) {
+      logger.error(`migrate: failed — ${(error as Error).message}`);
+      throw error;
+    } finally {
+      await closeDatabase(db);
+    }
+  }
+
   const app = await NestFactory.create(AppModule.forMode(env.MODE));
 
   app.enableShutdownHooks();

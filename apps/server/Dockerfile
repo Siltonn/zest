@@ -45,5 +45,10 @@ FROM base AS runtime
 ENV NODE_ENV=production
 # One tree, already pruned: no dev dependencies, no build toolchain, no source.
 COPY --from=build /prod ./
+# The .sql files, so the image can bring a database up to its own schema. An
+# image that cannot migrate is an image that can only be installed, never
+# upgraded — and the failure lands on the operator, at runtime, as a query
+# against a table that does not exist yet.
+COPY --from=build /app/packages/db/migrations ./node_modules/@zest/db/migrations
 EXPOSE 4000
 CMD ["node", "dist/main.js"]

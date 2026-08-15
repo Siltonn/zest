@@ -51,6 +51,35 @@ built for amd64 and arm64. `pull` is optional — with no image available, compo
 the same Dockerfiles from this checkout, which is what you want if you are changing
 anything.
 
+### Upgrading
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+That is the whole procedure. The server applies any pending migrations before it
+starts serving, so a schema change never lands on you as a runtime error later;
+if a migration fails the process exits rather than running against a schema it
+does not match. Two containers starting together (`MODE=api` and `MODE=worker`)
+take a Postgres advisory lock, so exactly one of them migrates.
+
+Your data lives in two named volumes — `postgres-data` and `media` — which
+survive `docker compose down` and any image change. `docker compose down -v` is
+the command that deletes them; there is no other.
+
+Pin a version for anything you care about:
+
+```bash
+ZEST_VERSION=0.1.0      # in .env — the default, `latest`, moves under you
+```
+
+Set `AUTO_MIGRATE=false` if you would rather run migrations from a deploy
+pipeline. The image can do it on demand:
+
+```bash
+docker compose run --rm server node node_modules/@zest/db/dist/migrate.js
+```
+
 Without an LLM key the full platform loop still works — compose, schedule, publish,
 simulated engagement, analytics, and answering comments by hand. Add one key to `.env` to
 switch on planning, drafting, reply triage and analysis:

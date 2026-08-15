@@ -56,6 +56,8 @@ services:
       BETTER_AUTH_URL: http://localhost:4000
       WEB_URL: http://localhost:3000
       DEMO_MODE: ${DEMO_MODE:-true}
+      # Explicit so the volume mount below cannot drift from where uploads land.
+      MEDIA_DIR: /app/media
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       ZEST_MODEL: ${ZEST_MODEL:-}
       MAIL_PROVIDER: ${MAIL_PROVIDER:-smtp}
@@ -65,6 +67,11 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "4000:4000"
+    volumes:
+      # Uploaded images live on disk, so without this every `docker compose up`
+      # after an image change deletes them — while media_assets keeps the rows
+      # that point at them, turning an upgrade into dangling references.
+      - media:/app/media
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,3 +93,4 @@ services:
 
 volumes:
   postgres-data:
+  media:
