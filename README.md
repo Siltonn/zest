@@ -3,6 +3,10 @@
 **An open-source AI social media operations agent.** It researches, drafts, schedules,
 publishes, replies, and learns — you approve until you trust it.
 
+![The Zest dashboard: thirteen agent proposals waiting for review, reach and engagement
+for the last thirty days, and two connected accounts each with its own
+voice](docs/assets/dashboard.png)
+
 Zest ships with **Pomelo**, a simulated social network that lives inside the repo, so the
 entire loop runs with **zero API keys**: the agent plans a week of content, you approve it
 from an inbox, posts publish on schedule, a simulated audience reacts on a believable
