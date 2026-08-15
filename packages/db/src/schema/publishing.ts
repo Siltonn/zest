@@ -1,5 +1,6 @@
 import {
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -132,4 +133,39 @@ export const replyDrafts = pgTable(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("reply_drafts_workspace_status_idx").on(t.workspaceId, t.status)],
+);
+
+/**
+ * Uploaded images, as records rather than loose files.
+ *
+ * Uploads used to write to disk and return a URL, leaving nothing behind that
+ * knew the file existed. That made three things impossible at once: browsing
+ * what you already have, telling which files are still referenced by a post,
+ * and cleaning up the ones that are not. A library page is the visible half of
+ * the fix; the lifecycle is the half that matters.
+ *
+ * Dimensions are stored because a connector's `maxImages` is not the only
+ * platform limit that bites — knowing a picture is 4000px wide before publish
+ * is cheaper than finding out from a rejection.
+ */
+export const mediaAssets = pgTable(
+  "media_assets",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    url: text().notNull(),
+    /** Path relative to MEDIA_DIR, so the file can be removed with the row. */
+    storageKey: text().notNull(),
+    filename: text().notNull(),
+    mimeType: text().notNull(),
+    bytes: integer().notNull(),
+    width: integer(),
+    height: integer(),
+    altText: text(),
+    createdByActor: jsonb().$type<Actor>().notNull(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("media_assets_workspace_idx").on(t.workspaceId, t.createdAt)],
 );

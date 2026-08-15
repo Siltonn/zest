@@ -7,6 +7,7 @@ import { useRef, useState, type ChangeEvent } from "react";
 import { api, type Account } from "@/lib/api";
 import { DateTimePicker } from "@/components/datetime-picker";
 import { AccountSwitcher } from "@/components/account-switcher";
+import { MediaPicker } from "@/components/media-picker";
 
 /**
  * Writing by hand.
@@ -229,6 +230,8 @@ export default function ComposePage() {
                 if (res.ok) {
                   const { url } = (await res.json()) as { url: string };
                   setMedia((m) => [...m, { url }]);
+                  // The picker's list is now stale by exactly this image.
+                  void queryClient.invalidateQueries({ queryKey: ["media"] });
                 }
               } finally {
                 setUploading(false);
@@ -244,15 +247,24 @@ export default function ComposePage() {
             </span>
             <div className="flex items-center gap-2">
               {(account?.platform?.maxImages ?? 0) > 0 && (
-                <Button
-                  size="sm"
-                  variant="tertiary"
-                  isPending={uploading}
-                  isDisabled={media.length >= (account?.platform?.maxImages ?? 4)}
-                  onPress={() => fileInput.current?.click()}
-                >
-                  Add image
-                </Button>
+                <>
+                  <MediaPicker
+                    attached={media.map((item) => item.url)}
+                    isDisabled={media.length >= (account?.platform?.maxImages ?? 4)}
+                    onPick={(asset) =>
+                      setMedia((m) => [...m, { url: asset.url }])
+                    }
+                  />
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    isPending={uploading}
+                    isDisabled={media.length >= (account?.platform?.maxImages ?? 4)}
+                    onPress={() => fileInput.current?.click()}
+                  >
+                    Upload
+                  </Button>
+                </>
               )}
               <DateTimePicker value={when} onChange={setWhen} />
             </div>

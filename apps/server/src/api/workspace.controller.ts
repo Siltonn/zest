@@ -15,7 +15,15 @@ import { InjectQueue } from "@nestjs/bullmq";
 import type { Queue } from "bullmq";
 import { randomBytes, createHash } from "node:crypto";
 import { and, desc, eq, schema, type Database } from "@zest/db";
-import { analytics, audit, autonomy, memory, onboarding } from "@zest/core";
+import {
+  analytics,
+  audit,
+  autonomy,
+  memory,
+  onboarding,
+  webhooks,
+  WEBHOOK_EVENT_TYPES,
+} from "@zest/core";
 import { getConnector, listConnectorMeta } from "@zest/connectors";
 import { getTokenVault } from "@zest/shared";
 import {
@@ -514,6 +522,73 @@ export class WorkspaceController {
         ),
       );
     return { ok: true };
+  }
+
+  // ── Outbound webhooks (how other systems hear about events) ───────────
+
+  @Get("webhooks")
+  async listWebhooks(@Req() req: AuthedRequest) {
+    const endpoints = await webhooks.listEndpoints(this.db, req.workspaceId);
+    // The secret is shown once, at creation. Listing it again would turn every
+    // screenshot of this page into a forgeable signature.
+    return endpoints.map(({ secret, ...endpoint }: webhooks.WebhookEndpoint) => ({
+      ...endpoint,
+      secretHint: `${secret.slice(0, 11)}…`,
+    }));
+  }
+
+  /** The event names an endpoint may subscribe to, so the UI need not hardcode them. */
+  @Get("webhooks/event-types")
+  eventTypes() {
+    return { eventTypes: WEBHOOK_EVENT_TYPES };
+  }
+
+  @Post("webhooks")
+  async addWebhook(@Req() req: AuthedRequest, @Body() body: unknown) {
+    const input = z
+      .object({
+        url: z.string().url(),
+        eventTypes: z.array(z.enum(WEBHOOK_EVENT_TYPES)).default([]),
+        description: z.string().max(200).optional(),
+      })
+      .parse(body);
+
+    const created = await webhooks.createEndpoint(this.db, {
+      workspaceId: req.workspaceId,
+      ...input,
+    });
+    // The only response that carries the signing key.
+    return created;
+  }
+
+  @Delete("webhooks/:id")
+  async removeWebhook(@Req() req: AuthedRequest, @Param("id") id: string) {
+    const deleted = await webhooks.deleteEndpoint(this.db, req.workspaceId, id);
+    if (!deleted) throw new BadRequestException("No such webhook");
+    return { ok: true };
+  }
+
+  /**
+   * Sends a signed sample so the receiver can be verified before a real event
+   * depends on it — the alternative is waiting for something to happen and
+   * guessing why nothing arrived.
+   */
+  @Post("webhooks/:id/test")
+  async testWebhook(@Req() req: AuthedRequest, @Param("id") id: string) {
+    const [endpoint] = (
+      await webhooks.listEndpoints(this.db, req.workspaceId)
+    ).filter((e: webhooks.WebhookEndpoint) => e.id === id);
+    if (!endpoint) throw new BadRequestException("No such webhook");
+
+    const outcome = await webhooks.deliver(endpoint, {
+      id: randomBytes(16).toString("hex"),
+      type: "post.status_changed",
+      workspaceId: req.workspaceId,
+      createdAt: new Date().toISOString(),
+      data: { test: true, postId: "00000000-0000-0000-0000-000000000000" },
+    });
+    await webhooks.recordOutcome(this.db, id, outcome);
+    return outcome;
   }
 
   // ── API keys (how external agents authenticate) ───────────────────────

@@ -153,6 +153,22 @@ curl -s -X POST -H "Authorization: Bearer $ZEST_API_KEY" "$ZEST_URL/api/v1/inges
 These return `{queued: true}` immediately and finish in the background — a cycle takes
 minutes. Poll `/api/v1/runs` to follow it; do not block waiting.
 
+## Attaching a picture
+
+Images already uploaded, newest first:
+
+```bash
+curl -s -H "Authorization: Bearer $ZEST_API_KEY" "$ZEST_URL/api/v1/media"
+```
+
+Pass a `url` from that list as `"media": [{"url": "…"}]` when creating a post. Prefer
+reusing one over asking the user to upload the same logo again. Check the platform's
+`maxImages` first — see `/api/v1/platforms`.
+
+Deleting refuses while a post still references the image, and says which posts those
+are. Read that list back to the user rather than re-sending with `?force=true`; the
+posts it names may already be published.
+
 ## Autonomy
 
 ```bash

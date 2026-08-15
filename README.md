@@ -219,8 +219,13 @@ Every one of these is "add one file", by design:
 | ✅ | **M7** Agent team | Research once → strategist per plan → writer per account, team view |
 | ✅ | **M8** Content wind tunnel | Pre-publish A/B against the simulated audience, winner promotable |
 
-Next: outbound webhooks, Threads and X connectors, a CLI, and draft comments so an agent and
-a human can discuss a post before it ships.
+Also shipped: [outbound webhooks](docs/webhooks.md) (signed, retried, one subscriber
+on the same event bus that feeds the live UI), a media library with a real lifecycle,
+and a `refreshCredentials` hook on the connector contract for OAuth platforms.
+
+Next: Threads and X connectors, a CLI, an SDK generated from the OpenAPI the
+controllers already produce, and draft comments so an agent and a human can discuss
+a post before it ships.
 
 ## License
 

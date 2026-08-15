@@ -126,7 +126,32 @@ export interface Connector {
   connectWithFields?(
     fields: Record<string, string>,
   ): Promise<{ credentials: Partial<AccountCredentials>; profile: NormalizedProfile }>;
+
+  /**
+   * Trade the refresh token for a new access token.
+   *
+   * Optional because none of the three connectors shipping today needs it —
+   * Pomelo is simulated, Bluesky uses an app password, and a Mastodon token
+   * does not expire. It exists anyway, and that is the point: every real OAuth2
+   * platform (X, LinkedIn, Threads) expires access tokens in an hour or two,
+   * and without a named place for this the refresh would end up copy-pasted
+   * into each connector's `publish` or hard-coded into the callers. Declaring
+   * it now costs an empty interface member; discovering it later costs a change
+   * to every call site.
+   *
+   * Return only what changed. The caller encrypts and persists the result, so
+   * a connector never touches the database or the vault.
+   */
+  refreshCredentials?(credentials: AccountCredentials): Promise<RefreshedCredentials>;
 }
+
+/** What a refresh yields. Everything is optional but at least one must change. */
+export type RefreshedCredentials = {
+  accessToken?: string;
+  /** Platforms that rotate refresh tokens return a new one; most do not. */
+  refreshToken?: string;
+  expiresAt?: Date;
+};
 
 /** Shared text validation so every connector reports limits the same way. */
 export function validateAgainstMeta(

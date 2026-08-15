@@ -20,7 +20,7 @@ import { REDIS_PUB } from "../infra/redis.module.js";
 import { NOTIFIER } from "../infra/notifier.module.js";
 import { QUEUE_PUBLISH } from "../queue/queue.constants.js";
 import { enqueueUnique } from "../queue/enqueue.js";
-import { toCredentials } from "./credentials.js";
+import { credentialsFor } from "./credentials.js";
 
 /**
  * Publishing.
@@ -97,7 +97,10 @@ export class PublishProcessor extends WorkerHost {
 
     try {
       const connector = getConnector(account.connectorId);
-      const result = await connector.publish(toCredentials(account), claimed.content);
+      // Resolved once and reused for the thread parts below: refreshing per
+      // part would trade one token exchange for as many as the thread is long.
+      const credentials = await credentialsFor(this.db, account, connector);
+      const result = await connector.publish(credentials, claimed.content);
 
       /**
        * Thread parts chain as replies to whatever went out last. Every
@@ -113,11 +116,10 @@ export class PublishProcessor extends WorkerHost {
       let previousExternalId = result.externalId;
       for (const [index, part] of (claimed.content.thread ?? []).entries()) {
         try {
-          const published = await connector.reply(
-            toCredentials(account),
-            previousExternalId,
-            { text: part, media: [] },
-          );
+          const published = await connector.reply(credentials, previousExternalId, {
+            text: part,
+            media: [],
+          });
           previousExternalId = published.externalId;
         } catch (error) {
           threadNote = `Thread part ${index + 2} of ${
@@ -202,7 +204,7 @@ export class PublishProcessor extends WorkerHost {
     try {
       const connector = getConnector(row.account.connectorId);
       const result = await connector.reply(
-        toCredentials(row.account),
+        await credentialsFor(this.db, row.account, connector),
         row.inbound.externalId,
         row.draft.content,
       );

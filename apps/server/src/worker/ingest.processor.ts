@@ -9,7 +9,7 @@ import { classifySentiment } from "@zest/simulator";
 import { DATABASE } from "../infra/database.module.js";
 import { REDIS_PUB } from "../infra/redis.module.js";
 import { QUEUE_AGENT_RUN, QUEUE_INGEST } from "../queue/queue.constants.js";
-import { toCredentials } from "./credentials.js";
+import { credentialsFor } from "./credentials.js";
 
 /**
  * Pulls engagement back in from every connected account.
@@ -92,8 +92,9 @@ export class IngestProcessor extends WorkerHost {
             .where(eq(schema.posts.id, action.postId));
           const account = accounts.find((a) => a.id === post?.accountId);
           if (!account) continue;
-          await getConnector(account.connectorId).reply(
-            toCredentials(account),
+          const connector = getConnector(account.connectorId);
+          await connector.reply(
+            await credentialsFor(this.db, account, connector),
             action.externalPostId,
             { text: action.text, media: [] },
           );
@@ -104,8 +105,9 @@ export class IngestProcessor extends WorkerHost {
             .where(eq(schema.inboundItems.id, action.inboundItemId));
           const account = accounts.find((a) => a.id === item?.accountId);
           if (!account || !item) continue;
-          await getConnector(account.connectorId).reply(
-            toCredentials(account),
+          const connector = getConnector(account.connectorId);
+          await connector.reply(
+            await credentialsFor(this.db, account, connector),
             item.externalId,
             { text: action.text, media: [] },
           );
@@ -117,10 +119,11 @@ export class IngestProcessor extends WorkerHost {
           const account = accounts[0];
           const connector = account ? getConnector(account.connectorId) : null;
           if (!account || !connector?.sendDm) continue;
-          await connector.sendDm(toCredentials(account), action.targetHandle, {
-            text: action.text,
-            media: [],
-          });
+          await connector.sendDm(
+            await credentialsFor(this.db, account, connector),
+            action.targetHandle,
+            { text: action.text, media: [] },
+          );
         }
 
         await automations.recordFired(this.db, workspaceId, action);
@@ -138,7 +141,10 @@ export class IngestProcessor extends WorkerHost {
   ): Promise<number> {
     const connector = getConnector(account.connectorId);
     const since = new Date(Date.now() - 7 * 86_400_000);
-    const snapshot = await connector.fetchEngagement(toCredentials(account), since);
+    const snapshot = await connector.fetchEngagement(
+      await credentialsFor(this.db, account, connector),
+      since,
+    );
 
     // Map platform post ids back to ours so metrics attach to the right row.
     const posts = await this.db

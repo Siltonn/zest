@@ -10,6 +10,7 @@ import {
   ListBoxItem,
   Select,
   Spinner,
+  toast,
 } from "@heroui/react";
 import { Field } from "@/components/field";
 import { Segmented } from "@/components/segmented";
@@ -27,6 +28,21 @@ type NotificationTarget = {
 
 type ApiKey = { id: string; name: string; lastUsedAt: string | null; key?: string };
 
+type Webhook = {
+  id: string;
+  url: string;
+  description: string | null;
+  eventTypes: string[];
+  isActive: string;
+  secretHint?: string;
+  /** Only present in the create response — the one time it is ever returned. */
+  secret?: string;
+  lastStatus: number | null;
+  lastError: string | null;
+  lastDeliveredAt: string | null;
+  consecutiveFailures: number;
+};
+
 const SCHEDULES = [
   { id: "daily", label: "Every day" },
   { id: "weekdays", label: "Weekdays only" },
@@ -37,6 +53,8 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [newKey, setNewKey] = useState<string | null>(null);
   const [target, setTarget] = useState({ kind: "slack", value: "" });
+  const [webhookUrl, setWebhookUrl] = useState("");
+  const [newSecret, setNewSecret] = useState<string | null>(null);
 
   const { data: workspace, isLoading } = useQuery({
     queryKey: ["workspace"],
@@ -96,6 +114,48 @@ export default function SettingsPage() {
     onSuccess: (created) => {
       setNewKey(created.key ?? null);
       void queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+    },
+  });
+
+  const { data: webhooks = [] } = useQuery({
+    queryKey: ["webhooks"],
+    queryFn: () => api.get<Webhook[]>("/webhooks"),
+  });
+
+  const addWebhook = useMutation({
+    mutationFn: () => api.post<Webhook>("/webhooks", { url: webhookUrl }),
+    onSuccess: (created) => {
+      setWebhookUrl("");
+      setNewSecret(created.secret ?? null);
+      void queryClient.invalidateQueries({ queryKey: ["webhooks"] });
+    },
+  });
+
+  const removeWebhook = useMutation({
+    mutationFn: (id: string) => api.delete(`/webhooks/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["webhooks"] }),
+  });
+
+  /**
+   * Sends a signed sample immediately. Worth a button: the alternative is
+   * wiring up a receiver, waiting for something to happen, and guessing which
+   * end is wrong when nothing arrives.
+   */
+  const testWebhook = useMutation({
+    mutationFn: (id: string) =>
+      api.post<{ ok: boolean; status: number; error?: string }>(
+        `/webhooks/${id}/test`,
+        {},
+      ),
+    onSuccess: (result) => {
+      if (result.ok) {
+        toast.success(`Receiver answered ${result.status}`);
+      } else {
+        toast.danger("The receiver did not accept it", {
+          description: result.error || `HTTP ${result.status}`,
+        });
+      }
+      void queryClient.invalidateQueries({ queryKey: ["webhooks"] });
     },
   });
 
@@ -231,6 +291,89 @@ export default function SettingsPage() {
               The platform loop works without one.
             </p>
           )}
+        </Card.Content>
+      </Card>
+
+      <Card>
+        <Card.Header>
+          <Card.Title className="text-base">Outbound webhooks</Card.Title>
+          <p className="text-xs opacity-50">
+            Every domain event, posted to your own endpoint — for n8n, Zapier, or
+            anything you have built. Each delivery is signed with{" "}
+            <code>X-Zest-Signature</code>; verify it before trusting the body.
+          </p>
+        </Card.Header>
+        <Card.Content className="space-y-3">
+          {newSecret && (
+            <div className="rounded-lg bg-success/10 px-3 py-2 text-sm">
+              <div className="font-medium text-success">
+                Copy this signing secret now — it is not shown again.
+              </div>
+              <code className="mt-1 block break-all text-xs">{newSecret}</code>
+            </div>
+          )}
+
+          {webhooks.map((hook) => (
+            <div key={hook.id} className="rounded-lg bg-default-100/60 px-3 py-2 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-medium">{hook.url}</span>
+                    {hook.isActive !== "true" && (
+                      <Chip size="sm" variant="soft" color="danger">
+                        disabled
+                      </Chip>
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-xs opacity-55">
+                    {hook.eventTypes.length === 0
+                      ? "all meaningful events"
+                      : hook.eventTypes.join(", ")}
+                    {hook.lastDeliveredAt &&
+                      ` · last delivered ${relativeTime(hook.lastDeliveredAt)}`}
+                    {hook.consecutiveFailures > 0 &&
+                      ` · ${hook.consecutiveFailures} failures in a row`}
+                  </div>
+                  {hook.lastError && (
+                    <div className="mt-0.5 truncate text-xs text-danger">
+                      {hook.lastError}
+                    </div>
+                  )}
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    onPress={() => testWebhook.mutate(hook.id)}
+                    isPending={testWebhook.isPending}
+                  >
+                    Send test
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="tertiary"
+                    onPress={() => removeWebhook.mutate(hook.id)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-48 flex-1">
+              <Field
+                value={webhookUrl}
+                onChange={setWebhookUrl}
+                type="url"
+                placeholder="https://your-service.example/zest"
+              />
+            </div>
+            <Button onPress={() => addWebhook.mutate()} isDisabled={!webhookUrl}>
+              Add endpoint
+            </Button>
+          </div>
         </Card.Content>
       </Card>
 

@@ -7,6 +7,7 @@ export const QUEUE_AGENT_RUN = "agent-run";
 export const QUEUE_NOTIFY = "notify";
 export const QUEUE_INGEST = "ingest";
 export const QUEUE_SIMULATOR = "simulator";
+export const QUEUE_WEBHOOK = "webhook";
 
 export const ALL_QUEUES = [
   QUEUE_PUBLISH,
@@ -14,6 +15,7 @@ export const ALL_QUEUES = [
   QUEUE_NOTIFY,
   QUEUE_INGEST,
   QUEUE_SIMULATOR,
+  QUEUE_WEBHOOK,
 ] as const;
 
 export type QueueName = (typeof ALL_QUEUES)[number];

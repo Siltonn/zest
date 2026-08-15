@@ -257,3 +257,40 @@ export const changeRequests = pgTable(
   },
   (t) => [index("change_requests_pending_idx").on(t.workspaceId, t.status)],
 );
+
+/**
+ * Outbound webhooks: the event bus, exposed.
+ *
+ * Domain events already fan out to SSE and the notifier, so this is a third
+ * subscriber rather than a new mechanism — the producers do not know it exists.
+ * What it buys is everything downstream of Zest: n8n, Zapier, a CI job, a
+ * spreadsheet someone maintains by hand.
+ *
+ * The secret is stored in plaintext deliberately, unlike platform tokens. It is
+ * an HMAC key we generate and the receiver copies; it grants no access to
+ * anything, and it has to be readable to be shown once in the UI. Encrypting it
+ * would imply a threat model it does not have.
+ */
+export const webhookEndpoints = pgTable(
+  "webhook_endpoints",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    url: text().notNull(),
+    /** Signing key for the `X-Zest-Signature` header. */
+    secret: text().notNull(),
+    /** Empty means every event; otherwise the `DomainEvent["type"]` values. */
+    eventTypes: jsonb().$type<string[]>().notNull().default([]),
+    description: text(),
+    isActive: text().notNull().default("true"),
+    /** Last delivery outcome, so the settings page can show a dead endpoint. */
+    lastStatus: integer(),
+    lastError: text(),
+    lastDeliveredAt: timestamp({ withTimezone: true }),
+    consecutiveFailures: integer().notNull().default(0),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("webhook_endpoints_workspace_idx").on(t.workspaceId)],
+);
