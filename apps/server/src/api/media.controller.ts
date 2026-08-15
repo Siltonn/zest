@@ -73,7 +73,11 @@ export class MediaController {
     const name = `${randomBytes(12).toString("hex")}${extension}`;
     await writeFile(join(directory, name), file.buffer);
 
-    const url = `${env.BETTER_AUTH_URL}/media/${req.workspaceId}/${name}`;
+    // Built from WEB_URL, not the server's own address: the browser reaches
+    // everything else through the web app's proxy, and an image URL pointing at
+    // the API directly is the one thing that would force the server to be
+    // publicly reachable.
+    const url = `${env.WEB_URL}/media/${req.workspaceId}/${name}`;
     const dimensions = readDimensions(file.buffer, file.mimetype);
     const asset = await media.recordUpload(this.db, {
       workspaceId: req.workspaceId,

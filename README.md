@@ -46,8 +46,12 @@ docker compose up
 
 Then open <http://localhost:3000>.
 
-The images are on [GHCR](https://github.com/Siltonn/zest/pkgs/container/zest-server),
-built for amd64 and arm64, each on a runner of that architecture rather than under emulation. `pull` is optional — with no image available, compose builds
+Two images on GHCR — [zest-server](https://github.com/Siltonn/zest/pkgs/container/zest-server)
+(API, workers, MCP) and [zest-web](https://github.com/Siltonn/zest/pkgs/container/zest-web)
+(the UI) — built for amd64 and arm64, each on a runner of that architecture rather than
+under emulation. They are two runtimes, not two deployments: one `docker compose up` starts
+both, and only `web` needs to face a browser. See [deploying.md](docs/deploying.md) for
+anywhere that is not this laptop. `pull` is optional — with no image available, compose builds
 the same Dockerfiles from this checkout, which is what you want if you are changing
 anything.
 

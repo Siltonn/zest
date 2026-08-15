@@ -16,6 +16,11 @@ const config: NextConfig = {
       // Pomelo's API is proxied under /api/pomelo because /pomelo itself is a
       // page in this app — the network's own feed.
       { source: "/api/pomelo/:path*", destination: `${serverUrl}/pomelo/:path*` },
+      // Uploaded images too. Without this the browser is sent straight at the
+      // server for media and nothing else, so a deployment that keeps the
+      // server internal — the natural shape, since everything above is proxied
+      // — renders every picture as a broken link.
+      { source: "/media/:path*", destination: `${serverUrl}/media/:path*` },
     ];
   },
 };
