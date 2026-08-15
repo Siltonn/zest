@@ -1,0 +1,34 @@
+# The build context was 4.9 GB without this, which is not a performance note:
+# it filled the Docker disk and the build died before it reached a single
+# instruction. Everything below is either rebuilt inside the image or has no
+# business being in it.
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+.turbo
+**/.turbo
+# `**/` is load-bearing. Docker's ignore patterns anchor at the context root, so
+# a bare `*.tsbuildinfo` misses every nested one — and a stale incremental cache
+# from the host is worse than no cache: tsc reads it, believes the outputs are
+# current, emits four of six modules and exits 0. The image then fails to build
+# on a missing export that exists in the source.
+**/*.tsbuildinfo
+
+.git
+.github
+
+# Secrets never enter an image, not even a layer that is later discarded.
+.env
+.env.*
+!.env.example
+
+# Local-only working notes and the operator's uploaded media.
+docs-local
+media
+
+.DS_Store
+*.log
+coverage
