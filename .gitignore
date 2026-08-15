@@ -15,9 +15,9 @@ coverage/
 # uploaded images
 media/
 
-# Working notes, not product documentation. The demo script is written in
-# presenter voice ("point out that…", "show it on /team") and the competitive
-# teardown names another open-source project's weaknesses — neither belongs in
-# a public repo, and both are still useful locally.
-docs/demo.md
-docs/competitive-postiz.md
+# Working notes. `docs/` is what a reader of this repo gets; `docs-local/` is
+# what only you get — presenter scripts, competitive teardowns, anything
+# written for an audience of one. A whole directory rather than a list of
+# filenames, so adding the next note is a `mv` and not a change here, and so
+# nothing lands in the public set by forgetting to add a line.
+docs-local/
