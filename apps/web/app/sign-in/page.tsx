@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Field } from "@/components/field";
+import { ZestMark } from "@/components/icons";
 
 /**
  * Sign in.
@@ -51,7 +52,9 @@ export default function SignInPage() {
   return (
     <div className="mx-auto flex min-h-[70vh] w-full max-w-sm flex-col justify-center">
       <div className="mb-6 text-center">
-        <div className="text-3xl">🍋</div>
+        <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground">
+          <ZestMark className="size-6" />
+        </div>
         <h1 className="mt-2 text-xl font-semibold tracking-tight">Sign in to Zest</h1>
       </div>
 
