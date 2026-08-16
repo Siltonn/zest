@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 
 /**
@@ -57,7 +59,33 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+/*
+ * Nothing else in the local dev chain reads .env: node does not, the Nest CLI
+ * does not, and turbo only hashes the file for its cache key. So the first
+ * loadEnv() call walks up from cwd (apps/server under turbo, the repo root
+ * under docker) until it finds one, and feeds it to Node's built-in parser.
+ *
+ * Deployments never take this path. Images carry no .env (.dockerignore), so
+ * the walk finds nothing; and loadEnvFile never overrides a variable that is
+ * already set, so injected environment — compose, a PaaS panel, a k8s Secret —
+ * always wins over a stray file.
+ */
+let envFileLoaded = false;
+function loadEnvFileOnce(): void {
+  if (envFileLoaded) return;
+  envFileLoaded = true;
+  for (let dir = process.cwd(); ; dir = dirname(dir)) {
+    const candidate = join(dir, ".env");
+    if (existsSync(candidate)) {
+      process.loadEnvFile(candidate);
+      return;
+    }
+    if (dirname(dir) === dir) return;
+  }
+}
+
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  loadEnvFileOnce();
   const parsed = envSchema.safeParse(source);
   if (!parsed.success) {
     const issues = parsed.error.issues
