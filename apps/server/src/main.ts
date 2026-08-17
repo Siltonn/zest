@@ -5,8 +5,7 @@ import { Logger } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { closeDatabase, createDatabase, migrateToLatest } from "@zest/db";
 import { AppModule } from "./app.module.js";
-import { loadEnv, runsApi } from "./config.js";
-import { mountBullBoard } from "./queue/bull-board.js";
+import { cockpitReadonly, loadEnv, runsApi } from "./config.js";
 import { DomainErrorFilter } from "./api/domain-error.filter.js";
 
 async function bootstrap(): Promise<void> {
@@ -50,14 +49,17 @@ async function bootstrap(): Promise<void> {
   // Uploaded images are served straight off disk — no CDN, no bucket.
   app.use("/media", express.static(resolve(env.MEDIA_DIR), { maxAge: "1y" }));
 
-  // The queue dashboard needs the producers, which exist in every mode.
-  mountBullBoard(app);
-
   // A worker-only process still binds a port so container health checks and
-  // Bull Board have something to talk to; it just serves no domain routes.
+  // the queue dashboard have something to talk to; it just serves no domain
+  // routes.
   await app.listen(env.PORT);
   logger.log(
     `zest server listening on :${env.PORT} (MODE=${env.MODE}, api=${runsApi(env.MODE)})`,
+  );
+  // Whether the dashboard can act on a queue or only report on it is the one
+  // thing about it worth knowing before you need it.
+  logger.log(
+    `queue dashboard at /admin/queues (${cockpitReadonly(env) ? "read-only" : "writeable"})`,
   );
 
   // Loud on purpose. Demo mode is what makes a fresh clone clickable, and it is
