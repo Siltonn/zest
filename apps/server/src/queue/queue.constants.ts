@@ -1,6 +1,6 @@
 /**
  * Every unit of real work is a job, even when a cron could have done it inline.
- * That buys retries, a visible Bull Board entry, and horizontal scale for free.
+ * That buys retries, a visible dashboard entry, and horizontal scale for free.
  */
 export const QUEUE_PUBLISH = "publish";
 export const QUEUE_AGENT_RUN = "agent-run";

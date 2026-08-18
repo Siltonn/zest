@@ -3,7 +3,8 @@ import { Global, Module } from "@nestjs/common";
 import { loadEnv } from "../config.js";
 import { ALL_QUEUES } from "./queue.constants.js";
 
-function redisConnection() {
+/** Shared with the dashboard, which opens its own clients against the same Redis. */
+export function redisConnection() {
   const url = new URL(loadEnv().REDIS_URL);
   return {
     host: url.hostname,

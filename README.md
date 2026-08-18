@@ -143,7 +143,7 @@ pnpm dev
 ```
 apps/web      Next.js 16 — frontend + BFF only. No system API, no DB access.
 apps/server   NestJS 11 — one codebase, role chosen by MODE:
-                api    → /api/v1 REST, /mcp, /events (SSE), /pomelo, Bull Board, auth
+                api    → /api/v1 REST, /mcp, /events (SSE), /pomelo, queue dashboard, auth
                 worker → BullMQ processors, repeatable jobs
                 all    → both in one process (default; fine for self-hosting)
 packages/
@@ -161,7 +161,13 @@ controller, an MCP tool, and a queue processor all call the same service functio
 
 **Async work never runs in a request.** The API enqueues a job and returns immediately; the
 worker executes it, writes to Postgres, and publishes a domain event to Redis; the API's SSE
-endpoint relays it to the browser. Every job is visible in Bull Board.
+endpoint relays it to the browser. Every job is visible in the queue dashboard —
+[BullMQ Cockpit](https://github.com/Siltonn/bullmq-durable/tree/main/packages/bullmq-cockpit)
+at `http://localhost:4000/admin/queues`, which is where you look first when the loop appears
+stuck: throughput, error rate, queue wait, and which queues have no worker attached. It takes
+the same session the API does, so signing into the app is all the access it needs. Locally it
+can retry, promote and remove jobs; on a deployed instance it is read-only, because the same
+page that retries a job can also drain a queue. `COCKPIT_READONLY` overrides either way.
 
 **Scheduled publishing cannot double-post.** The sweep enqueues one job per due post keyed
 by post id, and the handler claims the row with a conditional
