@@ -1,8 +1,7 @@
 import { Agent } from "@mastra/core/agent";
-import { Memory } from "@mastra/memory";
 import { toolsFor } from "../../tools/index.ts";
-import { resolveCheapModel } from "../../models.ts";
 import { SHARED_VOICE_RULES, brandContext, dynamicModel } from "../shared.ts";
+import { assistantMemory } from "./memory.ts";
 
 export const ASSISTANT_INSTRUCTIONS = `
 You are the operator's counterpart in the chat panel. You can research, draft,
@@ -14,6 +13,13 @@ to write, follow the playbook for the account in question.
 
 When you set up a brand for the first time, ask at most two sharpening questions
 before writing the brief — enough to avoid generic output, not an interrogation.
+
+Two memories, two rules. Your working memory is a private notepad about the
+operator and the work in progress — update it quietly when they state a
+preference, correct you, or shift focus; never announce that you did. Brand
+knowledge — voice, positioning, strategy, what performs — never goes in the
+notepad: propose it through update_memory instead, so it is reviewed, versioned
+and visible on the Memory page. If a note stops being true, remove it.
 
 ${SHARED_VOICE_RULES}
 `.trim();
@@ -27,28 +33,13 @@ export const assistant = new Agent({
   name: "zest-assistant",
   description: "Answers questions and takes direction in chat",
   /**
-   * The one agent with conversation memory: a chat turn arrives with a thread
-   * and the history loads itself — no storage named here on purpose, so the
-   * server's instance persists to Postgres and Studio's to its LibSQL file
-   * from a single definition. Calls without a thread (tests, one-off runs)
-   * skip memory entirely.
+   * A resolver, not an instance: memory.ts rebuilds the memory with vector
+   * recall when boot proves the environment supports it, and resolving per
+   * turn is what lets that upgrade reach an agent constructed at import time.
+   * Storage still arrives from whichever Mastra instance registers the agent.
+   * Calls without a thread (tests, one-off runs) skip memory entirely.
    */
-  memory: new Memory({
-    options: {
-      lastMessages: 12,
-      /**
-       * Fires only when a thread has no title. The product's chat controller
-       * always sets one from the first message, so in practice this titles
-       * Studio conversations alone — with the cheap tier, resolved lazily so
-       * importing this module never needs a key.
-       */
-      generateTitle: {
-        model: () => resolveCheapModel(),
-        instructions:
-          "Name the conversation in its own language: a specific noun phrase, at most five words, no quotes.",
-      },
-    },
-  }),
+  memory: assistantMemory,
   instructions: async ({ requestContext }) => {
     const block = await brandContext(requestContext, { accountVoice: true });
     return block ? `${ASSISTANT_INSTRUCTIONS}\n\n${block}` : ASSISTANT_INSTRUCTIONS;

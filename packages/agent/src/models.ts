@@ -148,6 +148,66 @@ export function resolvedModelId(
   return id.startsWith("gpt") ? id : "gpt-5";
 }
 
+// ── Embeddings ────────────────────────────────────────────────────────────
+
+/**
+ * The assistant's semantic recall needs an embedder, and the chain is shorter
+ * than the chat one: Anthropic has no embeddings API, so an Anthropic-only
+ * setup simply runs with recall off. OpenRouter first for the same reason chat
+ * checks it first; note its catalogue rejects `openai/*` embedding models
+ * (provider ToS), which is why the default there is Qwen.
+ */
+export const OPENAI_EMBEDDING_MODEL = "text-embedding-3-small";
+export const OPENROUTER_EMBEDDING_MODEL = "qwen/qwen3-embedding-4b";
+
+/**
+ * Both defaults truncate Matryoshka-style when asked for fewer dimensions.
+ * 1024 keeps every leg under pgvector's 2000-dimension index ceiling — the
+ * full 2560 of the Qwen model cannot be indexed at all — and makes the two
+ * providers interchangeable on disk.
+ */
+export const EMBEDDING_DIMENSIONS = 1024;
+
+export type ResolvedEmbedder = {
+  model: ReturnType<(typeof openai)["textEmbeddingModel"]>;
+  /** What a run would record — mirrors `resolvedModelId`. */
+  id: string;
+  options: { providerOptions: { openai: { dimensions: number } } };
+};
+
+/**
+ * `ZEST_EMBEDDING_MODEL` overrides the id and is interpreted by whichever
+ * provider is active, exactly as `ZEST_MODEL` is. Returns null when no
+ * provider can embed — semantic recall degrades to off, never to an error.
+ */
+export function resolveEmbedder(
+  env: NodeJS.ProcessEnv = process.env,
+): ResolvedEmbedder | null {
+  const options = {
+    providerOptions: { openai: { dimensions: EMBEDDING_DIMENSIONS } },
+  };
+
+  if (env.OPENROUTER_API_KEY) {
+    const id = env.ZEST_EMBEDDING_MODEL ?? OPENROUTER_EMBEDDING_MODEL;
+    const openrouter = createOpenAI({
+      apiKey: env.OPENROUTER_API_KEY,
+      baseURL: "https://openrouter.ai/api/v1",
+      headers: {
+        "HTTP-Referer": env.WEB_URL ?? "http://localhost:3000",
+        "X-Title": "Zest",
+      },
+    });
+    return { model: openrouter.textEmbeddingModel(id), id, options };
+  }
+
+  if (env.OPENAI_API_KEY) {
+    const id = env.ZEST_EMBEDDING_MODEL ?? OPENAI_EMBEDDING_MODEL;
+    return { model: openai.textEmbeddingModel(id), id, options };
+  }
+
+  return null;
+}
+
 /**
  * Thrown rather than returning a stub. Callers decide how to degrade — the
  * simulator falls back to templates, planning surfaces a clear message — and

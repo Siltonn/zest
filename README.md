@@ -162,7 +162,14 @@ assignments, the operator's message — stays in the user message. The product c
 [Mastra Memory](https://mastra.ai/docs/memory/overview): a conversation is a thread, history
 loads and persists inside the agent turn, and the server and Studio share the same store —
 the dev database's `mastra` schema — so a conversation started in the web app opens in
-Studio with its history, and vice versa.
+Studio with its history, and vice versa. Beyond the thread, the assistant keeps a
+workspace-scoped notepad (working memory: preferences, current focus — readable and
+wipeable as "assistant notes" in the chat panel) and, when the environment supports it,
+semantic recall over past conversations (pgvector + an embedding model; on OpenRouter or
+OpenAI keys, off with only Anthropic — the settings page says which you got and why).
+Brand knowledge never lands in either: it goes through `update_memory` proposals, reviewed
+and versioned on the Memory page. The full design is
+[ADR 005](docs/adr/005-chat-memory.md).
 
 **Interactively** — [Mastra Studio](https://mastra.ai/docs/getting-started/studio) serves
 the production registry, so what you exercise is what production runs:

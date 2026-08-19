@@ -38,7 +38,7 @@ export type ChatAnnotation = {
 
 type AssistantMemory = NonNullable<Awaited<ReturnType<typeof assistant.getMemory>>>;
 
-async function assistantMemory(mastra: Mastra): Promise<AssistantMemory> {
+async function memoryOf(mastra: Mastra): Promise<AssistantMemory> {
   const memory = await mastra.getAgent("zest-assistant").getMemory();
   if (!memory) {
     throw new Error(
@@ -120,7 +120,7 @@ export async function listChatThreads(
   mastra: Mastra,
   workspaceId: string,
 ): Promise<ChatThread[]> {
-  const memory = await assistantMemory(mastra);
+  const memory = await memoryOf(mastra);
   const { threads } = await memory.listThreads({
     filter: { resourceId: workspaceId },
     orderBy: { field: "updatedAt", direction: "DESC" },
@@ -140,7 +140,7 @@ export async function openChatThread(
   workspaceId: string,
   input: { threadId: string; title: string; existing: boolean },
 ): Promise<ChatThread | null> {
-  const memory = await assistantMemory(mastra);
+  const memory = await memoryOf(mastra);
 
   if (input.existing) {
     const thread = await memory.getThreadById({ threadId: input.threadId });
@@ -161,7 +161,7 @@ export async function readChatThread(
   workspaceId: string,
   threadId: string,
 ): Promise<{ conversation: ChatThread; messages: ChatMessage[] } | null> {
-  const memory = await assistantMemory(mastra);
+  const memory = await memoryOf(mastra);
   const thread = await memory.getThreadById({ threadId });
   if (!thread || thread.resourceId !== workspaceId) return null;
 
@@ -178,11 +178,43 @@ export async function deleteChatThread(
   workspaceId: string,
   threadId: string,
 ): Promise<boolean> {
-  const memory = await assistantMemory(mastra);
+  const memory = await memoryOf(mastra);
   const thread = await memory.getThreadById({ threadId });
   if (!thread || thread.resourceId !== workspaceId) return false;
   await memory.deleteThread(threadId);
   return true;
+}
+
+/**
+ * The assistant's notepad, surfaced. Working memory is written by the agent
+ * mid-turn and folded into its prompts invisibly — which is exactly the kind
+ * of quiet accumulation this product does not do. Reading it back makes the
+ * notes inspectable in the chat panel; clearing them is the operator's veto.
+ * Scope is the workspace, so `resourceId` carries it — the threadId argument
+ * is required by the signature and unused on the resource path.
+ */
+export async function readAssistantNotes(
+  mastra: Mastra,
+  workspaceId: string,
+): Promise<{ notes: string | null }> {
+  const memory = await memoryOf(mastra);
+  const notes = await memory.getWorkingMemory({
+    threadId: workspaceId,
+    resourceId: workspaceId,
+  });
+  return { notes: notes?.trim() ? notes : null };
+}
+
+export async function clearAssistantNotes(
+  mastra: Mastra,
+  workspaceId: string,
+): Promise<void> {
+  const memory = await memoryOf(mastra);
+  await memory.updateWorkingMemory({
+    threadId: workspaceId,
+    resourceId: workspaceId,
+    workingMemory: "",
+  });
 }
 
 /**
@@ -195,7 +227,7 @@ export async function annotateChatMessage(
   messageId: string,
   annotation: ChatAnnotation,
 ): Promise<void> {
-  const memory = await assistantMemory(mastra);
+  const memory = await memoryOf(mastra);
   const store = await memory.storage.getStore("memory");
   await store?.updateMessages({
     // The declared type wants a whole content object, but the adapters treat
@@ -214,7 +246,7 @@ export async function saveChatTurn(
   mastra: Mastra,
   input: { workspaceId: string; threadId: string; user: string; reply: string },
 ): Promise<{ userMessage: ChatMessage; reply: ChatMessage }> {
-  const memory = await assistantMemory(mastra);
+  const memory = await memoryOf(mastra);
   const now = new Date();
 
   const rows = [

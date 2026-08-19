@@ -9,6 +9,7 @@ import { api, type Workspace } from "@/lib/api";
 import { useLiveEvents } from "@/lib/events";
 import { relativeTime } from "@/lib/format";
 import { UserMenu } from "./user-menu";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 import {
   AccountsIcon,
   AuditIcon,
@@ -142,9 +143,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           {!collapsed && (
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold leading-tight">Zest</div>
-              <div className="truncate text-xs leading-tight opacity-50">
-                {workspace?.name ?? "…"}
-              </div>
+              {/* The workspace line doubles as the way to another workspace. */}
+              <WorkspaceSwitcher currentName={workspace?.name} />
             </div>
           )}
         </div>

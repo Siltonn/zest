@@ -9,6 +9,7 @@ import { agent as agentActor } from "@zest/shared";
 import { createMastra } from "../src/mastra.ts";
 import { setToolContext } from "../src/context.ts";
 import { hasModelAccess } from "../src/models.ts";
+import { enableAssistantRecall } from "../src/recall.ts";
 import { finishRun, startRun } from "../src/runs.ts";
 
 /**
@@ -58,6 +59,15 @@ if (!hasModelAccess()) {
 
 const databaseUrl = process.env.DATABASE_URL;
 const db = createDatabase(databaseUrl, { max: 4 });
+
+// Same wiring as the server: recall on when the environment supports it, and
+// one honest line about why when it does not.
+const recall = await enableAssistantRecall(databaseUrl);
+console.info(
+  recall.enabled
+    ? `[zest] assistant recall is on (embeddings: ${recall.model})`
+    : `[zest] assistant recall is off: ${recall.reason}`,
+);
 
 /** Studio's request context panel sends JSON, so anything may arrive here. */
 function text(value: unknown): string | undefined {

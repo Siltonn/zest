@@ -17,10 +17,12 @@ import { approvals } from "@zest/core";
 import {
   NoModelConfiguredError,
   annotateChatMessage,
+  clearAssistantNotes,
   createMastra,
   deleteChatThread,
   listChatThreads,
   openChatThread,
+  readAssistantNotes,
   readChatThread,
   runChat,
   saveChatTurn,
@@ -62,6 +64,23 @@ export class ChatController {
   @Get()
   async list(@Req() req: AuthedRequest) {
     return listChatThreads(this.mastra, req.workspaceId);
+  }
+
+  /**
+   * The assistant's notepad — working memory the agent keeps about how this
+   * workspace's operator works. Declared before `:id` so the literal path
+   * wins the route match. Read-only plus a veto: the notes are the agent's to
+   * write, the operator's to see and to wipe.
+   */
+  @Get("notes")
+  async notes(@Req() req: AuthedRequest) {
+    return readAssistantNotes(this.mastra, req.workspaceId);
+  }
+
+  @Delete("notes")
+  async forget(@Req() req: AuthedRequest) {
+    await clearAssistantNotes(this.mastra, req.workspaceId);
+    return { ok: true };
   }
 
   @Get(":id")

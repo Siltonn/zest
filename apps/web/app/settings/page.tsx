@@ -70,6 +70,9 @@ export default function SettingsPage() {
           provider?: string;
           model?: string | null;
           cheapModel?: string | null;
+          recall?:
+            | { enabled: true; model: string }
+            | { enabled: false; reason: string };
         };
       }>("/me"),
   });
@@ -86,7 +89,11 @@ export default function SettingsPage() {
 
   const update = useMutation({
     mutationFn: (patch: Partial<Workspace>) => api.post("/workspace", patch),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspace"] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["workspace"] });
+      // A rename shows up in the sidebar switcher too.
+      void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    },
   });
 
   const addTarget = useMutation({
@@ -281,6 +288,12 @@ export default function SettingsPage() {
                 <span>writing &amp; strategy: {me.capabilities.model ?? "default"}</span>
                 <span>
                   triage &amp; simulated audience: {me.capabilities.cheapModel ?? "default"}
+                </span>
+                <span>
+                  chat recall:{" "}
+                  {me.capabilities.recall?.enabled
+                    ? me.capabilities.recall.model
+                    : `off — ${me.capabilities.recall?.reason ?? "not available"}`}
                 </span>
               </div>
             </div>

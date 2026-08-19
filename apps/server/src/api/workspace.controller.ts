@@ -9,12 +9,14 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from "@nestjs/common";
 import { InjectQueue } from "@nestjs/bullmq";
 import type { Queue } from "bullmq";
+import type { Response } from "express";
 import { randomBytes, createHash } from "node:crypto";
-import { and, desc, eq, schema, type Database } from "@zest/db";
+import { and, asc, desc, eq, schema, type Database } from "@zest/db";
 import {
   analytics,
   audit,
@@ -32,7 +34,13 @@ import {
   readClock,
   releaseDueEvents,
 } from "@zest/simulator";
-import { activeProvider, hasModelAccess, resolvedModelId, CHEAP_MODEL } from "@zest/agent";
+import {
+  activeProvider,
+  hasModelAccess,
+  recallStatus,
+  resolvedModelId,
+  CHEAP_MODEL,
+} from "@zest/agent";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
@@ -42,7 +50,13 @@ import {
   QUEUE_INGEST,
   QUEUE_SIMULATOR,
 } from "../queue/queue.constants.js";
-import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
+import {
+  WorkspaceGuard,
+  assertWorkspaceAccess,
+  provisionWorkspace,
+  setWorkspaceCookie,
+  type AuthedRequest,
+} from "../auth/workspace.guard.js";
 import { buildPersonaReplyGenerator } from "../worker/persona-replies.js";
 
 /** Workspace settings, accounts, memory, autonomy, analytics and audit. */
@@ -99,6 +113,9 @@ export class WorkspaceController {
         // The resolved ids, not the raw env — what a run would actually record.
         model: resolvedModelId(),
         cheapModel: resolvedModelId(process.env.ZEST_MODEL_CHEAP ?? CHEAP_MODEL),
+        // What this process decided at boot about semantic recall — the reason
+        // is the operator-facing part when it is off.
+        recall: recallStatus(),
       },
     };
   }
@@ -130,6 +147,105 @@ export class WorkspaceController {
       .returning();
 
     return updated;
+  }
+
+  // ── Workspaces (all of yours, and making more) ────────────────────────
+
+  /**
+   * Every workspace this user belongs to, oldest first. An API key sees only
+   * the workspace it was minted in — it has no user to enumerate for.
+   */
+  @Get("workspaces")
+  async listWorkspaces(@Req() req: AuthedRequest) {
+    if (!req.userId) {
+      const [workspace] = await this.db
+        .select({ id: schema.workspaces.id, name: schema.workspaces.name })
+        .from(schema.workspaces)
+        .where(eq(schema.workspaces.id, req.workspaceId));
+      return workspace ? [{ ...workspace, role: "api", current: true }] : [];
+    }
+
+    const rows = await this.db
+      .select({
+        id: schema.workspaces.id,
+        name: schema.workspaces.name,
+        role: schema.memberships.role,
+      })
+      .from(schema.memberships)
+      .innerJoin(
+        schema.workspaces,
+        eq(schema.memberships.workspaceId, schema.workspaces.id),
+      )
+      .where(eq(schema.memberships.userId, req.userId))
+      .orderBy(asc(schema.memberships.createdAt));
+
+    // Nothing stops a user holding two membership rows in one workspace (the
+    // seed re-run does exactly that); the switcher means one entry per
+    // workspace, oldest membership first.
+    const byId = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) if (!byId.has(row.id)) byId.set(row.id, row);
+
+    return [...byId.values()].map((row) => ({
+      ...row,
+      current: row.id === req.workspaceId,
+    }));
+  }
+
+  /**
+   * A second (or fifth) workspace: its own brand, memory, accounts and clock.
+   * The response cookie moves this browser into it immediately, so the next
+   * page load starts the new workspace's onboarding instead of the old feed.
+   */
+  @Post("workspaces")
+  async createWorkspace(
+    @Req() req: AuthedRequest,
+    @Body() body: unknown,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!req.userId) {
+      throw new BadRequestException(
+        "API keys are minted inside one workspace and cannot create another",
+      );
+    }
+
+    const input = z
+      .object({
+        name: z.string().trim().min(1, "Name the workspace").max(80),
+        // The browser sends the operator's zone; storage stays UTC either way.
+        timezone: z.string().max(64).optional(),
+      })
+      .safeParse(body);
+    if (!input.success) {
+      throw new BadRequestException(input.error.issues[0]?.message ?? "Invalid input");
+    }
+
+    const workspace = await provisionWorkspace(this.db, {
+      userId: req.userId,
+      name: input.data.name,
+      timezone: input.data.timezone,
+    });
+
+    setWorkspaceCookie(res, workspace.id);
+    return { id: workspace.id, name: workspace.name, role: "owner", current: true };
+  }
+
+  /** Moves this browser into another of the caller's workspaces. */
+  @Post("workspaces/:id/switch")
+  async switchWorkspace(
+    @Req() req: AuthedRequest,
+    @Param("id") id: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    if (!req.userId) {
+      throw new BadRequestException("API keys are bound to one workspace");
+    }
+
+    const target = z.string().uuid().safeParse(id);
+    if (!target.success) throw new BadRequestException("Not a workspace id");
+
+    await assertWorkspaceAccess(this.db, target.data, req.userId);
+    setWorkspaceCookie(res, target.data);
+    return { ok: true };
   }
 
   // ── Connected accounts ────────────────────────────────────────────────

@@ -6,8 +6,8 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { createHash } from "node:crypto";
-import type { Request } from "express";
-import { and, eq, schema, type Database } from "@zest/db";
+import type { Request, Response } from "express";
+import { and, asc, eq, schema, type Database } from "@zest/db";
 import type { Actor } from "@zest/shared";
 import { DATABASE } from "../infra/database.module.js";
 import { AUTH, type Auth } from "./auth.js";
@@ -27,6 +27,9 @@ export type AuthedRequest = Request & {
   actor: Actor;
   userId?: string;
 };
+
+/** Which of their workspaces this browser is currently working in. */
+export const WORKSPACE_COOKIE = "zest_workspace";
 
 @Injectable()
 export class WorkspaceGuard implements CanActivate {
@@ -85,10 +88,18 @@ export class WorkspaceGuard implements CanActivate {
 
     if (!userId) throw new UnauthorizedException("Not signed in");
 
-    const [membership] = await this.db
+    const memberships = await this.db
       .select()
       .from(schema.memberships)
-      .where(eq(schema.memberships.userId, userId));
+      .where(eq(schema.memberships.userId, userId))
+      .orderBy(asc(schema.memberships.createdAt));
+
+    // The cookie names the workspace this browser last switched into. It is
+    // honored only when a membership backs it, so a stale or tampered value
+    // degrades to the user's oldest workspace rather than into someone else's.
+    const preferred = readCookie(req.headers.cookie, WORKSPACE_COOKIE);
+    const membership =
+      memberships.find((m) => m.workspaceId === preferred) ?? memberships[0];
 
     // A freshly signed-up user has no workspace yet. Creating one here means
     // they land on a usable app instead of an error they cannot act on.
@@ -106,23 +117,65 @@ export class WorkspaceGuard implements CanActivate {
       .from(schema.users)
       .where(eq(schema.users.id, userId));
 
-    const [workspace] = await this.db
-      .insert(schema.workspaces)
-      .values({
-        name: user?.name ? `${user.name}'s workspace` : "My workspace",
-        // Falls back to UTC; the settings page lets them change it.
-        timezone: "UTC",
-      })
-      .returning();
-
-    await this.db.insert(schema.memberships).values({
-      workspaceId: workspace!.id,
+    const workspace = await provisionWorkspace(this.db, {
       userId,
-      role: "owner",
+      name: user?.name ? `${user.name}'s workspace` : "My workspace",
     });
-
-    return workspace!.id;
+    return workspace.id;
   }
+}
+
+/**
+ * A workspace plus the membership that makes `userId` its owner — the pair
+ * everything else assumes exists together. First sign-in and "New workspace"
+ * both come through here so neither can create one without the other.
+ * Timezone falls back to UTC; the settings page lets them change it.
+ */
+export async function provisionWorkspace(
+  db: Database,
+  input: { userId: string; name: string; timezone?: string },
+): Promise<{ id: string; name: string }> {
+  const [workspace] = await db
+    .insert(schema.workspaces)
+    .values({ name: input.name, timezone: input.timezone ?? "UTC" })
+    .returning({ id: schema.workspaces.id, name: schema.workspaces.name });
+
+  await db.insert(schema.memberships).values({
+    workspaceId: workspace!.id,
+    userId: input.userId,
+    role: "owner",
+  });
+
+  return workspace!;
+}
+
+/**
+ * One year, HttpOnly, Lax: the choice should survive browser restarts, is no
+ * business of page scripts, and still rides along on top-level navigations so
+ * the next load lands in the workspace that was just chosen.
+ */
+export function setWorkspaceCookie(res: Response, workspaceId: string): void {
+  res.cookie(WORKSPACE_COOKIE, workspaceId, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 365 * 24 * 60 * 60 * 1000,
+  });
+}
+
+function readCookie(header: string | undefined, name: string): string | null {
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator === -1) continue;
+    if (part.slice(0, separator).trim() !== name) continue;
+    try {
+      return decodeURIComponent(part.slice(separator + 1).trim());
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 function extractApiKey(req: Request): string | null {

@@ -21,9 +21,9 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.0",
     "@ai-sdk/openai": "^2.0.0",
-    "@mastra/core": "^1.58.0",
-    "@mastra/memory": "^1.26.2",
-    "@mastra/pg": "^1.20.0",
+    "@mastra/core": "^1.60.0",
+    "@mastra/memory": "^1.27.0",
+    "@mastra/pg": "^1.21.0",
     "@zest/connectors": "workspace:*",
     "@zest/core": "workspace:*",
     "@zest/db": "workspace:*",
@@ -33,9 +33,9 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
-    "@mastra/observability": "^1.17.0",
+    "@mastra/observability": "^1.17.1",
     "@types/node": "^22.10.2",
-    "mastra": "^1.25.0",
+    "mastra": "^1.25.1",
     "typescript": "^5.7.2"
   }
 }

@@ -1,6 +1,7 @@
 export * from "./agents/shared.ts";
 export * from "./context.ts";
 export * from "./models.ts";
+export * from "./recall.ts";
 export * from "./runs.ts";
 export * from "./agents/researcher/research.ts";
 export * from "./agents/strategist/strategy.ts";

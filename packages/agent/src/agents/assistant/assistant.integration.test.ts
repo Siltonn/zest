@@ -6,7 +6,12 @@ import { NoModelConfiguredError } from "../../models.ts";
 import { createMastra } from "../../mastra.ts";
 import { scriptedModel, textTurn, toolTurn } from "../testing.ts";
 import { runChat } from "./chat.ts";
-import { openChatThread, readChatThread } from "./threads.ts";
+import {
+  clearAssistantNotes,
+  openChatThread,
+  readAssistantNotes,
+  readChatThread,
+} from "./threads.ts";
 
 /**
  * The product chat, minus the HTTP: tools run for real, and — the part the
@@ -125,6 +130,40 @@ describe("assistant chat", { skip: !url }, () => {
       thread?.messages.map((m) => m.role),
       ["user", "assistant", "user", "assistant"],
     );
+  });
+
+  test("the notepad: a turn writes it, the operator reads it, one action wipes it", async () => {
+    const threadId = crypto.randomUUID();
+    await openChatThread(mastra, workspaceId, {
+      threadId,
+      title: "Notes test",
+      existing: false,
+    });
+
+    // The tool Mastra injects when working memory is enabled, called exactly
+    // as a real model would call it mid-turn.
+    await runChat({
+      db,
+      workspaceId,
+      thread: threadId,
+      message: "Always show me the numbers before you draft anything.",
+      model: scriptedModel("note-taking-assistant", [
+        toolTurn("updateWorkingMemory", {
+          memory:
+            "# Operator notes\n\n## Standing instructions\n- Show numbers before drafting",
+        }),
+        textTurn("Noted — numbers first from now on."),
+      ]),
+    });
+
+    // Resource-scoped, so the chat panel reads it with no thread in hand.
+    const written = await readAssistantNotes(mastra, workspaceId);
+    assert.match(written.notes ?? "", /numbers before drafting/i);
+
+    // The operator's veto: wiped means gone, not blanked-but-present.
+    await clearAssistantNotes(mastra, workspaceId);
+    const wiped = await readAssistantNotes(mastra, workspaceId);
+    assert.equal(wiped.notes, null);
   });
 
   test("keyless and uninjected still throws the error the controller catches", async () => {

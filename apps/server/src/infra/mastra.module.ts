@@ -1,6 +1,6 @@
-import { Module } from "@nestjs/common";
+import { Logger, Module } from "@nestjs/common";
 import { PostgresStore } from "@mastra/pg";
-import { createMastra } from "@zest/agent";
+import { createMastra, enableAssistantRecall } from "@zest/agent";
 import { loadEnv } from "../config.js";
 
 export const MASTRA = Symbol("MASTRA");
@@ -23,8 +23,20 @@ export const MASTRA = Symbol("MASTRA");
   providers: [
     {
       provide: MASTRA,
-      useFactory: () => {
+      useFactory: async () => {
         const env = loadEnv();
+
+        // Attaches a vector store and embedder to the assistant's memory when
+        // this environment can support them; chat runs without recall (and
+        // says so, once) when it cannot.
+        const recall = await enableAssistantRecall(env.DATABASE_URL);
+        const logger = new Logger("Mastra");
+        if (recall.enabled) {
+          logger.log(`assistant recall is on (embeddings: ${recall.model})`);
+        } else {
+          logger.warn(`assistant recall is off: ${recall.reason}`);
+        }
+
         return createMastra({
           storage: new PostgresStore({
             id: "zest-mastra",

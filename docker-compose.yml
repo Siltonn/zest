@@ -1,6 +1,10 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    # The pgvector build of the same Postgres major: the assistant's semantic
+    # recall needs the `vector` extension, which the stock image does not ship.
+    # Same data directory layout, so an existing postgres-data volume carries
+    # over; without the extension the server still boots, with recall off.
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: zest
       POSTGRES_PASSWORD: zest
