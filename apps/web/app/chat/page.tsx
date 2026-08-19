@@ -46,6 +46,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: history = [] } = useQuery({
     queryKey: ["conversations"],
@@ -86,23 +87,40 @@ export default function ChatPage() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, pending]);
 
+  // Grow with the draft up to ~9 lines, then scroll inside the box. Empty
+  // means no inline height at all — measuring an empty textarea on mount reads
+  // the placeholder mid-layout and freezes a wrong height in.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (!input) {
+      el.style.height = "";
+      return;
+    }
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+  }, [input]);
+
   const submit = (text?: string) => {
     const message = (text ?? input).trim();
     if (!message || send.isPending) return;
     setInput("");
     setPending(message);
     send.mutate(message);
+    // Pressing Send moves focus to the button; typing should not need a click.
+    inputRef.current?.focus();
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-9rem)] max-w-none gap-5">
-      <aside className="hidden w-60 shrink-0 flex-col lg:flex">
+    <div className="flex h-full min-h-0">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-default-200/50 p-3 lg:flex">
         <Button
           variant="secondary"
           className="mb-3 w-full"
           onPress={() => {
             setConversationId(null);
             setInput("");
+            inputRef.current?.focus();
           }}
         >
           <ComposeIcon className="size-4" />
@@ -133,44 +151,51 @@ export default function ChatPage() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl space-y-6 pb-6">
-            {messages.length === 0 && !pending ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-6">
+          {messages.length === 0 && !pending ? (
+            // Centered in the viewport, not parked at the top of an empty page.
+            <div className="flex min-h-full items-center justify-center py-6">
               <Welcome onPick={submit} />
-            ) : (
-              messages.map((message) => (
+            </div>
+          ) : (
+            <div className="mx-auto w-full max-w-3xl space-y-6 py-6">
+              {messages.map((message) => (
                 <MessageRow key={message.id} message={message} />
-              ))
-            )}
+              ))}
 
-            {pending && (
-              <>
-                <MessageRow
-                  message={{
-                    id: "pending-user",
-                    role: "user",
-                    content: pending,
-                    toolCalls: [],
-                    proposals: [],
-                    agentRunId: null,
-                    createdAt: new Date().toISOString(),
-                  }}
-                />
-                <Thinking />
-              </>
-            )}
+              {pending && (
+                <>
+                  <MessageRow
+                    message={{
+                      id: "pending-user",
+                      role: "user",
+                      content: pending,
+                      toolCalls: [],
+                      proposals: [],
+                      agentRunId: null,
+                      createdAt: new Date().toISOString(),
+                    }}
+                  />
+                  <Thinking />
+                </>
+              )}
 
-            {send.isError && (
-              <p className="text-sm text-danger">{(send.error as Error).message}</p>
-            )}
-            <div ref={endRef} />
-          </div>
+              {send.isError && (
+                <p className="text-sm text-danger">{(send.error as Error).message}</p>
+              )}
+              <div ref={endRef} />
+            </div>
+          )}
         </div>
 
-        <div className="mx-auto w-full max-w-3xl pt-2">
-          <div className="rounded-2xl border border-default-200/60 bg-default-50/40 p-2">
+        {/* Pinned to the bottom of the screen — the page does not scroll, the
+            thread does. */}
+        <div className="px-4 pb-4 pt-2 sm:px-6">
+          <div className="mx-auto w-full max-w-3xl rounded-2xl border border-default-200/60 bg-default-50/40 p-2">
             <TextArea
+              ref={inputRef}
               value={input}
+              autoFocus
               onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
               onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
                 // Enter sends; shift+enter is a newline, as everywhere else.
@@ -179,9 +204,9 @@ export default function ChatPage() {
                   submit();
                 }
               }}
-              rows={2}
+              rows={1}
               placeholder="Ask for a plan, a draft, or an explanation…"
-              className="border-0 bg-transparent"
+              className="max-h-[220px] resize-none border-0 bg-transparent"
             />
             <div className="flex items-center justify-between px-1 pt-1">
               <span className="text-xs opacity-55">
@@ -205,7 +230,7 @@ export default function ChatPage() {
 
 function Welcome({ onPick }: { onPick: (text: string) => void }) {
   return (
-    <div className="pt-10">
+    <div className="w-full max-w-2xl">
       <div className="mb-6 text-center">
         <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground">
           <ZestMark className="size-6" />

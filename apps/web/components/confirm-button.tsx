@@ -38,22 +38,33 @@ export function ConfirmButton({
       </AlertDialog.Trigger>
       <AlertDialog.Backdrop>
         <AlertDialog.Container>
+          {/* Plain buttons that call `close`, not CloseTrigger wrappers:
+              CloseTrigger is itself a button, so nesting a Button inside it
+              renders <button><button> — invalid HTML and a hydration error. */}
           <AlertDialog.Dialog>
-            <AlertDialog.Header>
-              <AlertDialog.Icon status="danger" />
-              <AlertDialog.Heading>{title}</AlertDialog.Heading>
-            </AlertDialog.Header>
-            <AlertDialog.Body>{body}</AlertDialog.Body>
-            <AlertDialog.Footer>
-              <AlertDialog.CloseTrigger>
-                <Button variant="tertiary">Keep it</Button>
-              </AlertDialog.CloseTrigger>
-              <AlertDialog.CloseTrigger>
-                <Button variant="primary" onPress={onConfirm}>
-                  {confirmLabel}
-                </Button>
-              </AlertDialog.CloseTrigger>
-            </AlertDialog.Footer>
+            {({ close }) => (
+              <>
+                <AlertDialog.Header>
+                  <AlertDialog.Icon status="danger" />
+                  <AlertDialog.Heading>{title}</AlertDialog.Heading>
+                </AlertDialog.Header>
+                <AlertDialog.Body>{body}</AlertDialog.Body>
+                <AlertDialog.Footer>
+                  <Button variant="tertiary" onPress={close}>
+                    Keep it
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onPress={() => {
+                      close();
+                      onConfirm();
+                    }}
+                  >
+                    {confirmLabel}
+                  </Button>
+                </AlertDialog.Footer>
+              </>
+            )}
           </AlertDialog.Dialog>
         </AlertDialog.Container>
       </AlertDialog.Backdrop>

@@ -4,6 +4,7 @@ import { Card, Chip, Spinner } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use } from "react";
+import { FastForwardButton } from "@/components/fast-forward-button";
 import { compactNumber, relativeTime } from "@/lib/format";
 
 type PostDetail = {
@@ -154,8 +155,12 @@ export default function PomeloPostPage({
 
         {post.replies.length === 0 && (
           <Card>
-            <Card.Content className="py-8 text-center text-sm opacity-50">
-              Fast-forward a day to let the audience react.
+            <Card.Content className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-sm opacity-50">
+                The audience reacts on Pomelo time — advance the clock to hear
+                from them now.
+              </p>
+              <FastForwardButton size="sm" />
             </Card.Content>
           </Card>
         )}

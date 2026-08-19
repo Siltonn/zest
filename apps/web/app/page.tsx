@@ -342,7 +342,8 @@ export default function DashboardPage() {
               </div>
             ) : (data?.topPosts.length ?? 0) === 0 ? (
               <p className="px-6 py-8 text-center text-sm opacity-50">
-                Nothing published yet. Approve something and fast-forward a day.
+                Nothing published yet. Approve something, then fast-forward a day
+                on Pomelo.
               </p>
             ) : (
               <ul className="divide-y divide-default-200/60">

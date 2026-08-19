@@ -15,6 +15,18 @@
    components on the same theme instead of light cards on a dark page. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* HeroUI fields keep the browser's intrinsic control width (~200px) unless
+   the `fullWidth` variant is set per call site. Every field in this app sits
+   in a measured container — a form column, a composer card, a modal — so the
+   container is the width, everywhere. Declared in the components layer so a
+   width utility on a specific field still wins. */
+@layer components {
+  .input,
+  .textarea {
+    width: 100%;
+  }
+}
+
 html,
 body {
   height: 100%;
