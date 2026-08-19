@@ -1,0 +1,14 @@
+{
+  // The Studio entry lives outside `src/` so it never lands in `dist/`, which
+  // also puts it outside the build's `include`. This checks it where it is;
+  // everything it imports comes along transitively.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // The build pins `rootDir` to `src`, which this file sits outside of.
+    "rootDir": ".",
+    // Anywhere but `dist/`, which is what `pnpm deploy` copies into the image.
+    "tsBuildInfoFile": "./tsconfig.studio.tsbuildinfo"
+  },
+  "include": ["studio/**/*"]
+}

@@ -377,3 +377,40 @@ export async function rejectReplyDraft(
     });
   });
 }
+
+/**
+ * Everything a run left in the inbox, matched by `agentRunId` on posts and
+ * reply drafts. This is the only tie between a chat turn and domain state —
+ * the chat controller annotates its reply with these so the panel can show
+ * approval cards inline.
+ */
+export async function proposalsFromRun(
+  db: Database,
+  workspaceId: string,
+  runId: string,
+): Promise<{ kind: "post" | "reply"; id: string }[]> {
+  const posts = await db
+    .select({ id: schema.posts.id })
+    .from(schema.posts)
+    .where(
+      and(
+        eq(schema.posts.workspaceId, workspaceId),
+        eq(schema.posts.agentRunId, runId),
+      ),
+    );
+
+  const replies = await db
+    .select({ id: schema.replyDrafts.id })
+    .from(schema.replyDrafts)
+    .where(
+      and(
+        eq(schema.replyDrafts.workspaceId, workspaceId),
+        eq(schema.replyDrafts.agentRunId, runId),
+      ),
+    );
+
+  return [
+    ...posts.map(({ id }) => ({ kind: "post" as const, id })),
+    ...replies.map(({ id }) => ({ kind: "reply" as const, id })),
+  ];
+}

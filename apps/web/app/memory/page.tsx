@@ -13,6 +13,7 @@ type MemoryResponse = {
   strategy: MemoryDoc | null;
   learnings: MemoryDoc | null;
   persona: MemoryDoc | null;
+  accountLearnings: MemoryDoc | null;
   report: MemoryDoc | null;
 };
 
@@ -21,8 +22,13 @@ type MemoryResponse = {
  *
  * Plain markdown, versioned, editable. Keeping memory readable is the point:
  * when a post sounds wrong, the operator can see exactly which sentence in the
- * brief or the voice card produced it, and change that instead of arguing with
+ * brief or the playbook produced it, and change that instead of arguing with
  * the model.
+ *
+ * Two views, matching the two layers: the workspace tab holds the brand's
+ * shared truth (brief, matrix strategy, cross-account learnings), and each
+ * account tab holds that account's playbook and what the analyst has learned
+ * about it specifically. One document per account on purpose.
  */
 export default function MemoryPage() {
   const queryClient = useQueryClient();
@@ -43,11 +49,19 @@ export default function MemoryPage() {
   });
 
   const save = useMutation({
-    mutationFn: ({ kind, contentMd }: { kind: string; contentMd: string }) =>
+    mutationFn: ({
+      kind,
+      contentMd,
+      forAccount,
+    }: {
+      kind: string;
+      contentMd: string;
+      forAccount: string | null;
+    }) =>
       api.post("/memory", {
         kind,
         contentMd,
-        ...(kind === "persona" && accountId ? { accountId } : {}),
+        ...(forAccount ? { accountId: forAccount } : {}),
       }),
     onSuccess: () => {
       setEditing(null);
@@ -63,44 +77,69 @@ export default function MemoryPage() {
     );
   }
 
-  const docs: { kind: string; title: string; blurb: string; doc: MemoryDoc | null }[] = [
-    {
-      kind: "brand_brief",
-      title: "Brand brief",
-      blurb: "Who this brand is and what it will not say. You own this one.",
-      doc: data?.brief ?? null,
-    },
-    {
-      kind: "strategy",
-      title: "Strategy",
-      blurb: "The current plan and cadence. The agent proposes changes to it.",
-      doc: data?.strategy ?? null,
-    },
-    {
-      kind: "learnings",
-      title: "Learnings",
-      blurb: "What has actually held up across posts, written by the analyst.",
-      doc: data?.learnings ?? null,
-    },
-  ];
+  type DocEntry = {
+    kind: string;
+    title: string;
+    blurb: string;
+    doc: MemoryDoc | null;
+    /** Which account the document belongs to; null = workspace-wide. */
+    forAccount: string | null;
+  };
+
+  const handle = accounts.find((a) => a.id === accountId)?.handle;
+
+  const docs: DocEntry[] = accountId
+    ? [
+        {
+          kind: "persona",
+          title: `Playbook · @${handle}`,
+          blurb:
+            "This account's handbook: persona, positioning, content pillars, red lines, cadence notes. Two accounts sharing one voice is the failure mode this prevents.",
+          doc: data?.persona ?? null,
+          forAccount: accountId,
+        },
+        {
+          kind: "learnings",
+          title: `What works here · @${handle}`,
+          blurb:
+            "Patterns the analyst is confident about for this account in particular — things that would not survive being posted from a different handle.",
+          doc: data?.accountLearnings ?? null,
+          forAccount: accountId,
+        },
+      ]
+    : [
+        {
+          kind: "brand_brief",
+          title: "Brand brief",
+          blurb: "Who this brand is and what it will not say. You own this one.",
+          doc: data?.brief ?? null,
+          forAccount: null,
+        },
+        {
+          kind: "strategy",
+          title: "Strategy",
+          blurb:
+            "How the accounts divide the work, and the current global plan. The agent proposes changes to it.",
+          doc: data?.strategy ?? null,
+          forAccount: null,
+        },
+        {
+          kind: "learnings",
+          title: "Learnings",
+          blurb: "What has held up whichever account posts, written by the analyst.",
+          doc: data?.learnings ?? null,
+          forAccount: null,
+        },
+      ];
 
   // Only shown once a weekly run has produced one.
-  if (data?.report) {
+  if (!accountId && data?.report) {
     docs.push({
       kind: "report",
       title: "Latest weekly report",
       blurb: "What went out, how it did, and what the agent plans next.",
       doc: data.report,
-    });
-  }
-
-  if (accountId) {
-    docs.splice(1, 0, {
-      kind: "persona",
-      title: `Voice · @${accounts.find((a) => a.id === accountId)?.handle}`,
-      blurb:
-        "How this account in particular sounds. Two accounts sharing one voice is the failure mode this prevents.",
-      doc: data?.persona ?? null,
+      forAccount: null,
     });
   }
 
@@ -119,7 +158,7 @@ export default function MemoryPage() {
         workspaceLabel="Workspace memory"
       />
 
-      {docs.map(({ kind, title, blurb, doc }) => (
+      {docs.map(({ kind, title, blurb, doc, forAccount }) => (
         <Card key={kind}>
           <Card.Header className="flex flex-row items-start justify-between gap-3">
             <div>
@@ -145,7 +184,7 @@ export default function MemoryPage() {
                 <>
                   <Button
                     size="sm"
-                    onPress={() => save.mutate({ kind, contentMd: draft })}
+                    onPress={() => save.mutate({ kind, contentMd: draft, forAccount })}
                     isPending={save.isPending}
                   >
                     Save
@@ -171,7 +210,7 @@ export default function MemoryPage() {
 
           {history === kind && (
             <Card.Content className="border-b border-default-200/60 pb-4">
-              <MemoryHistory kind={kind} accountId={accountId} />
+              <MemoryHistory kind={kind} accountId={forAccount} />
             </Card.Content>
           )}
 

@@ -30,7 +30,7 @@ export const getBrandBrief = createTool({
 export const getPersona = createTool({
   id: "get_persona",
   description:
-    "Read the voice card for one connected account. Always read this before writing for that account — each handle has its own voice and must not drift toward the others.",
+    "Read one connected account's playbook: its persona, positioning, content pillars, red lines and cadence notes. Always read this before writing for that account — each handle has its own voice and must not drift toward the others.",
   inputSchema: z.object({
     accountId: z.string().describe("The connected account to write for"),
   }),
@@ -44,7 +44,7 @@ export const getPersona = createTool({
     );
     return {
       found: doc !== null,
-      content: doc?.contentMd ?? "No voice card yet for this account.",
+      content: doc?.contentMd ?? "No playbook yet for this account.",
       version: doc?.version ?? 0,
     };
   },

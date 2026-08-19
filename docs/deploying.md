@@ -124,5 +124,11 @@ start if a migration fails rather than running against a schema it does not
 match. Data lives in the `postgres-data` and `media` volumes; `docker compose
 down -v` is the only command that removes them.
 
+Two things share that Postgres, deliberately separated by schema: the product's
+tables live in `public` under our migrations, and Mastra keeps the chat threads
+(and its own state) in a `mastra` schema it creates and migrates itself, using
+a small second connection pool. A whole-database backup covers both;
+`DROP SCHEMA mastra CASCADE` resets conversations and touches nothing else.
+
 Pin `ZEST_VERSION` for anything you would be annoyed to have change under you —
 the default is `latest`, and `latest` moves.

@@ -189,7 +189,7 @@ export class WorkspaceController {
       .returning();
     if (!account) throw new BadRequestException("Could not save the account");
 
-    // A connected account with no voice card makes the agent write in nobody's
+    // A connected account with no playbook makes the agent write in nobody's
     // voice. Seeding a starter one means the first planning run has something
     // to work from, and gives the operator something concrete to edit rather
     // than a blank page.
@@ -234,16 +234,20 @@ export class WorkspaceController {
 
   @Get("memory")
   async memoryDocs(@Req() req: AuthedRequest, @Query("accountId") accountId?: string) {
-    const [brief, strategy, learnings, report] = await Promise.all([
-      memory.readMemory(this.db, req.workspaceId, "brand_brief"),
-      memory.readMemory(this.db, req.workspaceId, "strategy"),
-      memory.readMemory(this.db, req.workspaceId, "learnings"),
-      memory.readMemory(this.db, req.workspaceId, "report"),
-    ]);
-    const persona = accountId
-      ? await memory.readMemory(this.db, req.workspaceId, "persona", accountId)
-      : null;
-    return { brief, strategy, learnings, persona, report };
+    const [brief, strategy, learnings, report, persona, accountLearnings] =
+      await Promise.all([
+        memory.readMemory(this.db, req.workspaceId, "brand_brief"),
+        memory.readMemory(this.db, req.workspaceId, "strategy"),
+        memory.readMemory(this.db, req.workspaceId, "learnings"),
+        memory.readMemory(this.db, req.workspaceId, "report"),
+        accountId
+          ? memory.readMemory(this.db, req.workspaceId, "persona", accountId)
+          : null,
+        accountId
+          ? memory.readMemory(this.db, req.workspaceId, "learnings", accountId)
+          : null,
+      ]);
+    return { brief, strategy, learnings, persona, accountLearnings, report };
   }
 
   @Get("memory/:kind/history")
@@ -262,6 +266,9 @@ export class WorkspaceController {
 
   @Post("memory")
   async writeMemory(@Req() req: AuthedRequest, @Body() body: unknown) {
+    // Shape only — the scope rules (which kinds may carry an accountId) are
+    // enforced once, in `assertMemoryScope` at the service, and surface here
+    // as a 400 through the domain error filter.
     const input = z
       .object({
         kind: z.enum(["brand_brief", "strategy", "learnings", "persona", "report"]),
@@ -403,11 +410,14 @@ export class WorkspaceController {
   async plan(@Req() req: AuthedRequest) {
     // Queueing work the worker will silently skip is worse than saying no.
     this.requireModel();
-    // Research once, then a strategist per active plan and a writer per
-    // account. Each stage is its own job, so one plan failing is one retry.
-    const job = await this.agentQueue.add("plan-research", {
-      workspaceId: req.workspaceId,
-    });
+    // One job runs the whole cycle — research once, a strategist per active
+    // plan, a writer per account — as the plan-cycle workflow, which contains
+    // failures per plan and per account rather than retrying the world.
+    const job = await this.agentQueue.add(
+      "plan-cycle",
+      { workspaceId: req.workspaceId },
+      { attempts: 1 },
+    );
     return { queued: true, jobId: job.id };
   }
 

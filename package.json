@@ -17,6 +17,7 @@
     "db:generate": "pnpm --filter @zest/db generate",
     "db:migrate": "pnpm --filter @zest/db migrate",
     "db:studio": "pnpm --filter @zest/db studio",
+    "studio": "pnpm --filter @zest/agent studio",
     "demo": "pnpm --filter @zest/seed seed"
   },
   "devDependencies": {

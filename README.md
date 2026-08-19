@@ -105,10 +105,11 @@ so there is nothing to memorise:
 
 1. **Connect an account.** Pomelo is built in and needs no credentials — it is a
    working social network with a simulated audience, so the whole loop runs offline.
-   Connecting writes a starter voice card for the account.
+   Connecting writes a starter playbook for the account.
 2. **Say who the brand is.** One page in `/memory`: what you build, who it is for,
    what you never say. Every run reads this first.
-3. **Give each account a voice.** Edit the starter card. A founder account and a
+3. **Give each account a playbook.** Edit the starter one — persona, positioning,
+   content pillars, red lines. A founder account and a
    company account should not sound alike, and the agent will not invent the
    difference for you.
 4. **Set up a plan and run it.** A plan carries its own cadence and names the accounts it
@@ -137,6 +138,64 @@ docker compose up -d postgres redis mailpit
 pnpm db:migrate
 pnpm dev
 ```
+
+### Developing and testing the agents
+
+Each agent lives in its own directory under `packages/agent/src/agents/` — its prompt and
+`Agent` definition, the stage functions it runs in production, and its tests, side by side:
+
+```
+agents/researcher/   agent.ts · research.ts · researcher.integration.test.ts
+agents/strategist/   agent.ts · strategy.ts · …
+agents/copywriter/   agent.ts · scorer.ts · copy.ts · rework.ts · polish.ts · …
+agents/community/    agent.ts · triage.ts · …
+agents/analyst/      agent.ts · analysis.ts · …
+agents/assistant/    agent.ts · chat.ts · threads.ts · …
+workflows/plan-cycle.ts   the one Mastra workflow: research → strategy per plan →
+                          the write_plan gate → copy per account
+```
+
+The agents are singletons whose system prompt is assembled per request: role instructions
+plus the workspace memory (brand brief, matrix strategy, learnings — and for account-scoped
+runs, that account's playbook and its own learnings). Identity and policy ride in the system prompt; the task at hand — a briefing,
+assignments, the operator's message — stays in the user message. The product chat runs on
+[Mastra Memory](https://mastra.ai/docs/memory/overview): a conversation is a thread, history
+loads and persists inside the agent turn, and the server and Studio share the same store —
+the dev database's `mastra` schema — so a conversation started in the web app opens in
+Studio with its history, and vice versa.
+
+**Interactively** — [Mastra Studio](https://mastra.ai/docs/getting-started/studio) serves
+the production registry, so what you exercise is what production runs:
+
+```bash
+pnpm studio
+```
+
+- **Agents tab**: chat with any role, carrying its real tools and the same system prompt
+  production assembles. Edit a prompt in its `agent.ts` and the dev server hot-reloads.
+  The assistant has its threads sidebar here — the same conversations the product's chat
+  panel shows, auto-titled by the cheap tier. The five pipeline roles are stateless by
+  design (no memory in production, none here), so their chats are one-off debugging
+  sessions. Traces show every step with tool arguments, results and timings.
+- **Workflows tab**: `plan-cycle` runs the actual pipeline stage by visible stage against
+  your development database, behaving as the cron does (the `write_plan` gate included).
+- **Tools tab**: run a single tool on its own — "does `get_analytics` return anything for
+  this workspace" deserves an answer without a model in the way.
+- **Scorers tab**: the copywriter's `draft-quality` scorer grades every generation in code
+  (empty output, preamble, hashtag stuffing).
+
+Studio acts on the oldest workspace — the demo one after `pnpm demo`. Pin another with
+`ZEST_STUDIO_WORKSPACE_ID`, or per conversation from the Request Context panel
+(`workspaceId`, `planId`, `accountId`, `model`). The writes are real: proposals land in the
+approval inbox, attributed to their runs.
+
+**In CI** — every stage has an integration test that runs the real agent, real tools and
+real Postgres with a *scripted* model injected through `options.model` (no key, no
+network): the strategist's tool call becomes plan rows and prose-without-a-tool-call is a
+recorded failure; a crashed triage gives its claimed comments back; the assistant's second
+turn provably receives the first from memory; `plan-cycle` stops at the gate without a
+grant and contains a mid-cycle failure to its plan. `pnpm test` runs them where
+`DATABASE_URL` is set and they skip themselves where it is not.
 
 ## Architecture
 
@@ -228,7 +287,7 @@ export ZEST_API_KEY=zest_…
 ```
 
 Then ask *"what's waiting in my Zest queue?"*. The skill knows the product's opinions:
-it reads an account's voice card before drafting, prefers sending a post back over
+it reads an account's playbook before drafting, prefers sending a post back over
 rejecting it, and approves nothing you did not ask it to approve.
 
 ## Extension points

@@ -1,5 +1,5 @@
+import { randomUUID } from "node:crypto";
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -13,12 +13,28 @@ import {
 } from "@nestjs/common";
 import type { Redis } from "ioredis";
 import type { Database } from "@zest/db";
-import { conversations } from "@zest/core";
-import { NoModelConfiguredError, runChat } from "@zest/agent";
+import { approvals } from "@zest/core";
+import {
+  NoModelConfiguredError,
+  annotateChatMessage,
+  createMastra,
+  deleteChatThread,
+  listChatThreads,
+  openChatThread,
+  readChatThread,
+  runChat,
+  saveChatTurn,
+  titleFrom,
+  type ChatMessage,
+  type ChatThread,
+} from "@zest/agent";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
+import { MASTRA } from "../infra/mastra.module.js";
 import { REDIS_PUB } from "../infra/redis.module.js";
 import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
+
+type ZestMastra = ReturnType<typeof createMastra>;
 
 /**
  * The operator's direct line to the agent.
@@ -27,6 +43,12 @@ import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
  * waiting. It uses the same tools and the same autonomy guard as the scheduled
  * runs, so asking for a draft here produces a proposal — which comes back with
  * the message, to be approved without leaving the conversation.
+ *
+ * Conversations are the assistant's memory threads, stored by Mastra in its
+ * own schema: history loads and persists inside the agent turn itself, and
+ * this controller's job shrinks to ownership checks, the run's annotations
+ * (which run replied, what it proposed), and keeping the response shape the
+ * panel has always rendered.
  */
 @Controller("api/v1/chat")
 @UseGuards(WorkspaceGuard)
@@ -34,23 +56,24 @@ export class ChatController {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(REDIS_PUB) private readonly redis: Redis,
+    @Inject(MASTRA) private readonly mastra: ZestMastra,
   ) {}
 
   @Get()
   async list(@Req() req: AuthedRequest) {
-    return conversations.listConversations(this.db, req.workspaceId);
+    return listChatThreads(this.mastra, req.workspaceId);
   }
 
   @Get(":id")
   async read(@Req() req: AuthedRequest, @Param("id") id: string) {
-    const found = await conversations.readConversation(this.db, req.workspaceId, id);
+    const found = await readChatThread(this.mastra, req.workspaceId, id);
     if (!found) throw new NotFoundException("No such conversation");
     return found;
   }
 
   @Delete(":id")
   async remove(@Req() req: AuthedRequest, @Param("id") id: string) {
-    await conversations.deleteConversation(this.db, req.workspaceId, id);
+    await deleteChatThread(this.mastra, req.workspaceId, id);
     return { ok: true };
   }
 
@@ -64,28 +87,12 @@ export class ChatController {
       })
       .parse(body);
 
-    const conversation = input.conversationId
-      ? (await conversations.readConversation(
-          this.db,
-          req.workspaceId,
-          input.conversationId,
-        ))?.conversation
-      : await conversations.createConversation(
-          this.db,
-          req.workspaceId,
-          input.message,
-        );
-
-    if (!conversation) throw new NotFoundException("No such conversation");
-
-    // Recorded before the run so the turn survives a failure mid-answer.
-    const userMessage = await conversations.appendMessage(this.db, {
-      conversationId: conversation.id,
-      role: "user",
-      content: input.message,
+    const conversation = await openChatThread(this.mastra, req.workspaceId, {
+      threadId: input.conversationId ?? randomUUID(),
+      title: titleFrom(input.message),
+      existing: Boolean(input.conversationId),
     });
-
-    const history = await conversations.historyFor(this.db, conversation.id);
+    if (!conversation) throw new NotFoundException("No such conversation");
 
     try {
       const result = await runChat({
@@ -94,37 +101,63 @@ export class ChatController {
         publisher: this.redis,
         message: input.message,
         accountId: input.accountId,
-        history,
+        thread: conversation.id,
         trigger: req.actor.kind === "mcp" ? "mcp" : "chat",
       });
 
-      const proposals = await conversations.proposalsFromRun(
+      const proposals = await approvals.proposalsFromRun(
         this.db,
         req.workspaceId,
         result.runId,
       );
 
-      const reply = await conversations.appendMessage(this.db, {
-        conversationId: conversation.id,
+      // Stamped onto the stored message by its own id, so the thread shows the
+      // run link and the approval cards on re-read exactly as it does now.
+      if (result.messageId) {
+        await annotateChatMessage(this.mastra, result.messageId, {
+          agentRunId: result.runId,
+          proposals,
+        });
+      }
+
+      const now = new Date();
+      const userMessage: ChatMessage = {
+        id: result.userMessageId ?? randomUUID(),
+        role: "user",
+        content: input.message,
+        toolCalls: [],
+        proposals: [],
+        agentRunId: null,
+        createdAt: now,
+      };
+      const reply: ChatMessage = {
+        id: result.messageId ?? randomUUID(),
         role: "assistant",
         content: result.reply,
         toolCalls: result.toolCalls,
         proposals,
         agentRunId: result.runId,
-      });
+        createdAt: now,
+      };
 
-      return { conversation, userMessage, reply };
+      return { conversation: touched(conversation, now), userMessage, reply };
     } catch (error) {
       if (error instanceof NoModelConfiguredError) {
         // Recorded as a turn so the reason stays visible in the thread.
-        const reply = await conversations.appendMessage(this.db, {
-          conversationId: conversation.id,
-          role: "assistant",
-          content: error.message,
+        const turn = await saveChatTurn(this.mastra, {
+          workspaceId: req.workspaceId,
+          threadId: conversation.id,
+          user: input.message,
+          reply: error.message,
         });
-        return { conversation, userMessage, reply };
+        return { conversation, ...turn };
       }
       throw error;
     }
   }
+}
+
+/** The list sorts by updatedAt; reflect the turn without re-reading the row. */
+function touched(conversation: ChatThread, at: Date): ChatThread {
+  return { ...conversation, updatedAt: at };
 }

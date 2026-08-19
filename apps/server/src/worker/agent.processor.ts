@@ -2,15 +2,14 @@ import { InjectQueue, Processor, WorkerHost } from "@nestjs/bullmq";
 import { Inject, Logger } from "@nestjs/common";
 import type { Job, Queue } from "bullmq";
 import type { Redis } from "ioredis";
-import { eq, schema, type Database } from "@zest/db";
-import { Notifier, approvals, autonomy, emit, plans, recycle } from "@zest/core";
+import { schema, type Database } from "@zest/db";
+import { Notifier, approvals, plans, recycle } from "@zest/core";
 import {
   runAnalysis,
   runCopy,
+  runPlanCycle,
   runReplyTriage,
-  runResearch,
   runRework,
-  runStrategy,
 } from "@zest/agent";
 import { DATABASE } from "../infra/database.module.js";
 import { REDIS_PUB } from "../infra/redis.module.js";
@@ -21,6 +20,14 @@ import { QUEUE_AGENT_RUN } from "../queue/queue.constants.js";
  * Agent runs happen here rather than in a request. They take minutes, they are
  * retryable, and their results land in the database — so the API can answer
  * immediately and the UI can follow along over SSE.
+ *
+ * This class is queue glue and nothing else: which job maps to which entry
+ * point, and which notification its outcome deserves. The pipeline itself —
+ * research feeding a strategist per plan, the write_plan gate, a copywriter
+ * per account — is the `plan-cycle` workflow in @zest/agent, where it can be
+ * run and inspected from Studio. What remains queued separately is what must
+ * be triggerable on its own: recycling, post-approval copy, triage, analysis,
+ * rework.
  */
 @Processor(QUEUE_AGENT_RUN)
 export class AgentProcessor extends WorkerHost {
@@ -30,8 +37,6 @@ export class AgentProcessor extends WorkerHost {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(REDIS_PUB) private readonly redis: Redis,
     @Inject(NOTIFIER) private readonly notifier: Notifier,
-    // Stages enqueue the next stage rather than calling it, so each one retries
-    // on its own and shows up as a separate entry on the queue board.
     @InjectQueue(QUEUE_AGENT_RUN) private readonly queue: Queue,
   ) {
     super();
@@ -41,240 +46,185 @@ export class AgentProcessor extends WorkerHost {
     const workspaceId = job.data.workspaceId as string;
 
     switch (job.name) {
-      /**
-       * Stage one of a planning cycle, and the only one that runs per
-       * workspace. It fans out to a strategy job per active plan rather than
-       * calling them inline, so a plan that fails does not take the others with
-       * it and can be retried on its own from the queue.
-       */
+      // The old per-stage names, kept for jobs already on the queue when an
+      // instance upgrades. `plan-strategy` is gone entirely — a stranded one
+      // logs as unknown below rather than re-running half a pipeline.
       case "planning":
-      case "plan-research": {
-        const only = job.data.planId as string | undefined;
-        const active = await plans.activePlans(this.db, workspaceId);
-        const targets = only ? active.filter((p) => p.id === only) : active;
-
-        if (targets.length === 0) {
-          this.logger.warn(`No active plans for ${workspaceId}; nothing to plan`);
-          return { plans: 0 };
-        }
-
-        // Evergreen plans split off before research: their tick is a
-        // deterministic pick over measured results, needs no model, and must
-        // keep working when research would be skipped for lack of one.
-        const evergreen = targets.filter((p) => p.kind === "evergreen");
-        const fresh = targets.filter((p) => p.kind !== "evergreen");
-
-        for (const plan of evergreen) {
-          await this.queue.add("plan-recycle", { workspaceId, planId: plan.id });
-        }
-        if (fresh.length === 0) {
-          return { plans: 0, recycling: evergreen.length };
-        }
-
-        const result = await runResearch({
-          db: this.db,
-          workspaceId,
-          publisher: this.redis,
-        });
-        if (result.skipped) {
-          this.logger.warn(`Research skipped: ${result.skipped}`);
-          return { ...result, recycling: evergreen.length };
-        }
-
-        for (const plan of fresh) {
-          await this.queue.add("plan-strategy", {
-            workspaceId,
-            planId: plan.id,
-            briefing: result.briefing,
-            cycleId: result.runId,
-          });
-        }
-        return { ...result, plans: fresh.length, recycling: evergreen.length };
-      }
-
-      /** One evergreen tick: re-propose each account's strongest rested post. */
-      case "plan-recycle": {
-        const result = await recycle.recycleTick(this.db, {
-          workspaceId,
-          planId: job.data.planId as string,
-          publisher: this.redis,
-        });
-        if (result.skipped) {
-          this.logger.log(`Recycle skipped: ${result.skipped}`);
-        }
-        if (result.proposed > 0) {
-          await this.notifyPending(
-            workspaceId,
-            "Evergreen re-runs are waiting for review",
-          );
-        }
-        return result;
-      }
-
-      /** Stage two: one programme's plan, fanning out to a writer per account. */
-      case "plan-strategy": {
-        const result = await runStrategy({
-          db: this.db,
-          workspaceId,
-          planId: job.data.planId as string,
-          briefing: (job.data.briefing as string) ?? "",
-          cycleId: job.data.cycleId as string | undefined,
-          publisher: this.redis,
-        });
-        if (result.skipped) {
-          this.logger.warn(`Strategy skipped: ${result.skipped}`);
-          return result;
-        }
-
-        const planId = job.data.planId as string;
-        const accountIds = await plans.accountsWithPendingItems(this.db, planId);
-
-        // The cheap review altitude. Without a granted rule the planned week
-        // waits in the inbox as one card, so topics can be dropped before a
-        // model call turns each into a draft. With `auto` it goes straight to
-        // the writers — same stage, same code, different trust.
-        const decision = await autonomy.decide(this.db, {
-          workspaceId,
-          action: "write_plan",
-        });
-
-        if (decision.mode !== "auto") {
-          await emit(this.redis, {
-            type: "inbox.new",
-            workspaceId,
-            itemKind: "plan",
-            entityId: planId,
-            summary: `A week of content is planned and waiting for review`,
-          });
-          await this.notifyPending(workspaceId, "A planned week is waiting for review");
-          return { ...result, awaitingReview: accountIds.length };
-        }
-
-        for (const accountId of accountIds) {
-          await this.queue.add("plan-copy", {
-            workspaceId,
-            planId,
-            accountId,
-            cycleId: job.data.cycleId,
-          });
-        }
-        return { ...result, writers: accountIds.length };
-      }
-
-      /** Stage three: one account's voice, in its own context. */
-      case "plan-copy": {
-        const result = await runCopy({
-          db: this.db,
-          workspaceId,
-          planId: job.data.planId as string,
-          accountId: job.data.accountId as string,
-          cycleId: job.data.cycleId as string | undefined,
-          publisher: this.redis,
-        });
-        if (result.proposals > 0) {
-          await this.notifyPending(workspaceId, "New posts are waiting for review");
-        }
-        return result;
-      }
-
-      case "triage": {
-        const result = await runReplyTriage({
-          db: this.db,
-          workspaceId,
-          publisher: this.redis,
-        });
-        if (result.handled > 0) {
-          await this.notifyPending(workspaceId, "Replies are drafted and waiting");
-        }
-        return result;
-      }
-
+      case "plan-research":
+      case "plan-cycle":
+        return this.planCycle(workspaceId, job.data.planId as string | undefined);
+      case "plan-recycle":
+        return this.planRecycle(workspaceId, job.data.planId as string);
+      case "plan-copy":
+        return this.planCopy(workspaceId, job.data);
+      case "triage":
+        return this.triage(workspaceId);
       case "analysis":
-        return runAnalysis({
-          db: this.db,
-          workspaceId,
-          publisher: this.redis,
-          weekly: Boolean(job.data.weekly),
-        });
-
-      /** Fired for every workspace on the planning cron. */
-      case "plan-all": {
-        const workspaces = await this.db
-          .select({ id: schema.workspaces.id })
-          .from(schema.workspaces);
-        for (const workspace of workspaces) {
-          await this.queue.add("plan-research", { workspaceId: workspace.id });
-        }
-        return { planned: workspaces.length };
-      }
-
-      /**
-       * A draft sent back with a note. This is the difference between "ask for
-       * changes" and "reject" — the operator says what is wrong once and the
-       * revision comes back, rather than the note sitting unread.
-       */
-      case "rework": {
-        const result = await runRework({
-          db: this.db,
-          workspaceId,
-          postId: job.data.postId as string,
-          publisher: this.redis,
-        });
-        if (result.skipped) {
-          this.logger.warn(`Rework skipped: ${result.skipped}`);
-          return result;
-        }
-        await this.notifyPending(workspaceId, "A revised post is waiting for review");
-        return result;
-      }
-
-      /**
-       * Nightly and weekly fan-out. Analysis proposes memory updates, so a
-       * quiet night still ends with something in the inbox to look at in the
-       * morning — which is the difference between an assistant and a tool.
-       */
+        return this.analysis(workspaceId, Boolean(job.data.weekly));
+      case "rework":
+        return this.rework(workspaceId, job.data.postId as string);
       case "analyze-all":
-      case "report-all": {
-        const weekly = job.name === "report-all";
-        const workspaces = await this.db
-          .select({ id: schema.workspaces.id })
-          .from(schema.workspaces);
-        for (const workspace of workspaces) {
-          try {
-            await runAnalysis({
-              db: this.db,
-              workspaceId: workspace.id,
-              publisher: this.redis,
-              weekly,
-            });
-            if (weekly) {
-              await this.notifier.dispatch(this.db, {
-                workspaceId: workspace.id,
-                title: "Your weekly report is ready",
-                body: "Last week's numbers, what the agent learned, and its plan for this week.",
-                url: "/dashboard",
-                kind: "report",
-              });
-            } else {
-              await this.notifyPending(
-                workspace.id,
-                "The agent has something to propose",
-              );
-            }
-          } catch (error) {
-            // One workspace without a model configured must not stop the rest.
-            this.logger.warn(
-              `${job.name} failed for ${workspace.id}: ${(error as Error).message}`,
-            );
-          }
-        }
-        return { analyzed: workspaces.length, weekly };
-      }
-
+      case "report-all":
+        return this.analyzeAll(job.name === "report-all");
       default:
         this.logger.warn(`Unknown agent job ${job.name}`);
         return null;
     }
+  }
+
+  /**
+   * One planning cycle, whole. Enqueued with attempts: 1 on purpose — the
+   * strategist and copywriter write rows, so a queue-level retry would run
+   * them twice and double the plan. Failures inside the cycle are contained
+   * per plan and per account by the workflow, recorded on their run rows, and
+   * visible on the team page.
+   */
+  private async planCycle(workspaceId: string, planId?: string) {
+    const active = await plans.activePlans(this.db, workspaceId);
+    const targets = planId ? active.filter((p) => p.id === planId) : active;
+
+    if (targets.length === 0) {
+      this.logger.warn(`No active plans for ${workspaceId}; nothing to plan`);
+      return { plans: 0 };
+    }
+
+    // Evergreen plans split off before research: their tick is a deterministic
+    // pick over measured results, needs no model, and must keep working when
+    // research would be skipped for lack of one.
+    for (const plan of targets.filter((p) => p.kind === "evergreen")) {
+      await this.queue.add("plan-recycle", { workspaceId, planId: plan.id });
+    }
+    if (targets.every((p) => p.kind === "evergreen")) {
+      return { plans: 0, recycling: targets.length };
+    }
+
+    const result = await runPlanCycle({
+      db: this.db,
+      workspaceId,
+      publisher: this.redis,
+      planId,
+    });
+    if (result.skipped) {
+      this.logger.warn(`Planning skipped: ${result.skipped}`);
+      return result;
+    }
+
+    if (result.awaitingReview > 0) {
+      await this.notifyPending(workspaceId, "A planned week is waiting for review");
+    }
+    if (result.proposals > 0) {
+      await this.notifyPending(workspaceId, "New posts are waiting for review");
+    }
+    return result;
+  }
+
+  /** One evergreen tick: re-propose each account's strongest rested post. */
+  private async planRecycle(workspaceId: string, planId: string) {
+    const result = await recycle.recycleTick(this.db, {
+      workspaceId,
+      planId,
+      publisher: this.redis,
+    });
+    if (result.skipped) {
+      this.logger.log(`Recycle skipped: ${result.skipped}`);
+    }
+    if (result.proposed > 0) {
+      await this.notifyPending(workspaceId, "Evergreen re-runs are waiting for review");
+    }
+    return result;
+  }
+
+  /**
+   * Writing for one account, outside the cycle: this is what approving a
+   * planned week enqueues, one job per account so a failure retries alone.
+   */
+  private async planCopy(workspaceId: string, data: Job["data"]) {
+    const result = await runCopy({
+      db: this.db,
+      workspaceId,
+      planId: data.planId as string,
+      accountId: data.accountId as string,
+      cycleId: data.cycleId as string | undefined,
+      publisher: this.redis,
+    });
+    if (result.proposals > 0) {
+      await this.notifyPending(workspaceId, "New posts are waiting for review");
+    }
+    return result;
+  }
+
+  private async triage(workspaceId: string) {
+    const result = await runReplyTriage({
+      db: this.db,
+      workspaceId,
+      publisher: this.redis,
+    });
+    if (result.handled > 0) {
+      await this.notifyPending(workspaceId, "Replies are drafted and waiting");
+    }
+    return result;
+  }
+
+  private async analysis(workspaceId: string, weekly: boolean) {
+    return runAnalysis({ db: this.db, workspaceId, publisher: this.redis, weekly });
+  }
+
+  /**
+   * A draft sent back with a note. This is the difference between "ask for
+   * changes" and "reject" — the operator says what is wrong once and the
+   * revision comes back, rather than the note sitting unread.
+   */
+  private async rework(workspaceId: string, postId: string) {
+    const result = await runRework({
+      db: this.db,
+      workspaceId,
+      postId,
+      publisher: this.redis,
+    });
+    if (result.skipped) {
+      this.logger.warn(`Rework skipped: ${result.skipped}`);
+      return result;
+    }
+    await this.notifyPending(workspaceId, "A revised post is waiting for review");
+    return result;
+  }
+
+  /**
+   * Nightly and weekly fan-out. Analysis proposes memory updates, so a quiet
+   * night still ends with something in the inbox to look at in the morning —
+   * which is the difference between an assistant and a tool.
+   */
+  private async analyzeAll(weekly: boolean) {
+    const workspaces = await this.db
+      .select({ id: schema.workspaces.id })
+      .from(schema.workspaces);
+    for (const workspace of workspaces) {
+      try {
+        await runAnalysis({
+          db: this.db,
+          workspaceId: workspace.id,
+          publisher: this.redis,
+          weekly,
+        });
+        if (weekly) {
+          await this.notifier.dispatch(this.db, {
+            workspaceId: workspace.id,
+            title: "Your weekly report is ready",
+            body: "Last week's numbers, what the agent learned, and its plan for this week.",
+            url: "/dashboard",
+            kind: "report",
+          });
+        } else {
+          await this.notifyPending(workspace.id, "The agent has something to propose");
+        }
+      } catch (error) {
+        // One workspace without a model configured must not stop the rest.
+        this.logger.warn(
+          `${weekly ? "report-all" : "analyze-all"} failed for ${workspace.id}: ${(error as Error).message}`,
+        );
+      }
+    }
+    return { analyzed: workspaces.length, weekly };
   }
 
   private async notifyPending(workspaceId: string, title: string): Promise<void> {

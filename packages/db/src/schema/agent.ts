@@ -19,7 +19,6 @@ import {
   autonomyActionEnum,
   autonomyModeEnum,
   digestModeEnum,
-  messageRoleEnum,
   metricEnum,
   notificationKindEnum,
 } from "./enums.ts";
@@ -176,52 +175,6 @@ export const notificationTargets = pgTable(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("notification_targets_workspace_idx").on(t.workspaceId)],
-);
-
-/**
- * Chat conversations.
- *
- * Without these every turn was standalone — the agent could not follow up on
- * what it had just said, which is not a conversation. Messages carry the tool
- * calls that produced them so the UI can show its work, and the ids of anything
- * it proposed so those can be approved inline rather than sending the operator
- * off to the inbox.
- */
-export const conversations = pgTable(
-  "conversations",
-  {
-    id: uuid().primaryKey().defaultRandom(),
-    workspaceId: uuid()
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
-    /** Taken from the opening message; renameable later. */
-    title: text().notNull(),
-    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("conversations_workspace_idx").on(t.workspaceId, t.updatedAt)],
-);
-
-export const messages = pgTable(
-  "messages",
-  {
-    id: uuid().primaryKey().defaultRandom(),
-    conversationId: uuid()
-      .notNull()
-      .references(() => conversations.id, { onDelete: "cascade" }),
-    role: messageRoleEnum().notNull(),
-    content: text().notNull(),
-    /** Which tools ran, so the UI can show what it actually did. */
-    toolCalls: jsonb().$type<{ tool: string; summary?: string }[]>().notNull().default([]),
-    /** Posts and replies proposed during this turn, for inline approval. */
-    proposals: jsonb()
-      .$type<{ kind: "post" | "reply"; id: string }[]>()
-      .notNull()
-      .default([]),
-    agentRunId: uuid().references(() => agentRuns.id, { onDelete: "set null" }),
-    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("messages_conversation_idx").on(t.conversationId, t.createdAt)],
 );
 
 /**

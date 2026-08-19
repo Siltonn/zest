@@ -300,22 +300,32 @@ export const ignoreInbound = createTool({
 export const updateMemory = createTool({
   id: "update_memory",
   description:
-    "Rewrite one of the memory documents (strategy, learnings, brand brief, or an account's voice card). Changes to the brief or a voice card always need human approval — those define who the brand is.",
+    "Rewrite one of the memory documents. Workspace-wide: brand_brief, strategy (the matrix — how the accounts divide the work), learnings (patterns that hold whichever account posts). Per account: persona (that account's playbook) and learnings with an accountId (patterns that only hold on that account). When rewriting a playbook, keep every section heading and change only the sections that need it. Changes to the brief or a playbook always need human approval — those define who the brand is.",
   inputSchema: z.object({
     kind: z.enum(["brand_brief", "strategy", "learnings", "persona"]),
     contentMd: z.string(),
     accountId: z
       .string()
       .optional()
-      .describe("Required when kind is persona: which account's voice this is"),
+      .describe(
+        "Required for persona (whose playbook this is). Set it on learnings only when the pattern would not survive being posted from a different account. Never valid for brand_brief or strategy.",
+      ),
     reason: z.string(),
   }),
   execute: async (input, { requestContext }) => {
     const toolContext = readToolContext(requestContext);
     const { db, workspaceId, actor, runId } = toolContext;
 
+    // The same rules assertMemoryScope enforces at the write, surfaced here as
+    // data so the model corrects itself instead of failing the run.
     if (input.kind === "persona" && !input.accountId) {
-      return { ok: false, error: "A persona update must name the account it belongs to" };
+      return { ok: false, error: "A playbook update must name the account it belongs to" };
+    }
+    if ((input.kind === "brand_brief" || input.kind === "strategy") && input.accountId) {
+      return {
+        ok: false,
+        error: `${input.kind} is workspace-wide. What is specific to one account belongs in that account's playbook (persona) or its account-scoped learnings.`,
+      };
     }
 
     const decision = await autonomy.decide(db, {

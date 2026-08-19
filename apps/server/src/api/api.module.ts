@@ -10,6 +10,7 @@ import { PostsController } from "./posts.controller.js";
 import { WorkspaceController } from "./workspace.controller.js";
 import { PomeloController } from "../pomelo/pomelo.controller.js";
 import { PlanScheduleModule } from "../worker/plan-schedule.module.js";
+import { MastraModule } from "../infra/mastra.module.js";
 
 /**
  * The HTTP surface: REST under /api/v1, the MCP endpoint, the live event
@@ -17,7 +18,7 @@ import { PlanScheduleModule } from "../worker/plan-schedule.module.js";
  * into @zest/core, serialize.
  */
 @Module({
-  imports: [PlanScheduleModule],
+  imports: [PlanScheduleModule, MastraModule],
   controllers: [
     HealthController,
     PostsController,

@@ -107,10 +107,34 @@ export function resolveCheapModel(
   return resolveModel(env.ZEST_MODEL_CHEAP ?? CHEAP_MODEL, env);
 }
 
+/** The concrete model type every provider hands back. */
+export type ResolvedModel = ReturnType<typeof resolveModel>;
+
+/**
+ * A model override as callers pass it: an id string in production, or a
+ * LanguageModel object a test injected. Objects cannot ride through JSON
+ * schemas, which is why the override travels on the request context.
+ */
+export type ModelOverride = string | ResolvedModel;
+
+/** True when a test injected a model object — env guards must not skip it. */
+export function injectedModel(model?: ModelOverride): model is ResolvedModel {
+  return Boolean(model) && typeof model !== "string";
+}
+
 /**
  * The id a run will actually use, for the audit trail. Provenance is the
  * product's pitch, and "which model wrote this" is the first question when a
  * draft comes back wrong — so it is recorded per run, not inferred later.
+ */
+export function modelIdFor(override?: ModelOverride): string | null {
+  if (injectedModel(override)) return override.modelId;
+  return resolvedModelId(override);
+}
+
+/**
+ * The same answer for a plain id, kept for the status endpoint that reports
+ * which model would answer without having a run in hand.
  */
 export function resolvedModelId(
   preferred?: string,

@@ -150,34 +150,52 @@ export async function readOnboarding(
   return { complete: doneCount === steps.length, doneCount, steps };
 }
 
-/** The starter voice card written when an account is connected. */
+/**
+ * The starter playbook written when an account is connected.
+ *
+ * The section headings are the contract: agents are told to preserve every
+ * heading when they propose a rewrite, so the structure survives edits from
+ * three directions (operator, agent, onboarding). One document per account on
+ * purpose — it mirrors the account handbook a real operations team keeps.
+ */
 export function starterPersona(input: {
   handle: string;
   displayName: string;
   platform: string;
 }): string {
-  return `# Voice: @${input.handle}
+  return `# Playbook: @${input.handle}
 ${PLACEHOLDER_MARK}
 
-**Who is speaking:** ${input.displayName} on ${input.platform}.
+## Persona
 
-**Tone:** Plain and specific. Short sentences. No hype words, no emoji walls.
+${input.displayName} on ${input.platform}. Plain and specific. Short sentences.
+No hype words, no emoji walls.
 
-**What this account posts about**
-- (Replace these with your real content pillars — the agent uses them to choose topics.)
+## Positioning
+
+Who this account is for, and what job it does among the brand's accounts —
+who it pulls in, and where it sends them.
+
+## Content pillars
+
+- (Replace these with your real pillars — the agent uses them to choose topics.)
 - Progress on what you are building
 - Something you learned the hard way
 - A useful opinion about your field
 
-**Never**
+## Red lines
+
 - Engagement bait ("Thoughts? 👇")
 - Claiming results you cannot show
 - Replying to bad-faith comments
 
-**Audience:** People who could actually use what you make.
+## Cadence notes
 
-> This is a starter card so the agent has somewhere to begin. Edit it — the more
-> specific it is, the less generic the drafts come back.
+Anything about rhythm this account in particular should respect — beyond what
+the plans already schedule.
+
+> This is a starter playbook so the agent has somewhere to begin. Edit it — the
+> more specific it is, the less generic the drafts come back.
 `;
 }
 

@@ -256,7 +256,7 @@ export class PostsController {
   }
 
   /**
-   * Polish a hand-written draft against the account's voice card. Inline
+   * Polish a hand-written draft against the account's playbook. Inline
    * rather than queued — the operator is sitting in the composer waiting.
    */
   @HttpPost("compose/polish")

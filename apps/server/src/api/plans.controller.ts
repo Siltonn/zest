@@ -245,10 +245,13 @@ export class PlansController {
       );
     }
 
-    const job = await this.agentQueue.add("plan-research", {
-      workspaceId: req.workspaceId,
-      planId: id,
-    });
+    const job = await this.agentQueue.add(
+      "plan-cycle",
+      { workspaceId: req.workspaceId, planId: id },
+      // attempts: 1 — a retried cycle would run the strategist twice and
+      // double the plan; failures are contained per stage in the workflow.
+      { attempts: 1 },
+    );
     return { queued: true, jobId: job.id };
   }
 

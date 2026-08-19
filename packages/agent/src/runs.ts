@@ -1,6 +1,6 @@
 import { and, eq, lt, schema, type Database } from "@zest/db";
 import { emit, type EventPublisher } from "@zest/core";
-import type { RoleName } from "./agents.ts";
+import type { RoleName } from "./agents/shared.ts";
 
 /**
  * Run bookkeeping.
