@@ -3,8 +3,12 @@ import { test } from "node:test";
 import {
   DEFAULT_MODEL,
   CHEAP_MODEL,
+  EMBEDDING_DIMENSIONS,
+  OPENAI_EMBEDDING_MODEL,
+  OPENROUTER_EMBEDDING_MODEL,
   activeProvider,
   hasModelAccess,
+  resolveEmbedder,
   resolvedModelId,
   toOpenRouterModel,
 } from "./models.ts";
@@ -70,6 +74,42 @@ test("the cheap tier stays cheap on every provider", () => {
     resolvedModelId(CHEAP_MODEL, { OPENAI_API_KEY: "x" } as never),
     "gpt-4o-mini",
   );
+});
+
+test("embeddings follow the provider chain, minus Anthropic", () => {
+  // OpenRouter's catalogue refuses `openai/*` embedding models, so its leg
+  // defaults to Qwen rather than sharing the OpenAI default.
+  assert.equal(
+    resolveEmbedder({ OPENROUTER_API_KEY: "x", OPENAI_API_KEY: "z" } as never)?.id,
+    OPENROUTER_EMBEDDING_MODEL,
+  );
+  assert.equal(
+    resolveEmbedder({ OPENAI_API_KEY: "z" } as never)?.id,
+    OPENAI_EMBEDDING_MODEL,
+  );
+  // Anthropic has no embeddings API: chat on, recall off — not an error.
+  assert.equal(resolveEmbedder({ ANTHROPIC_API_KEY: "y" } as never), null);
+  assert.equal(resolveEmbedder({} as never), null);
+});
+
+test("an embedding override rides whichever provider is active", () => {
+  const env = {
+    OPENROUTER_API_KEY: "x",
+    ZEST_EMBEDDING_MODEL: "mistralai/codestral-embed-2505",
+  } as never;
+  assert.equal(resolveEmbedder(env)?.id, "mistralai/codestral-embed-2505");
+});
+
+test("every leg asks for the same, indexable dimension count", () => {
+  // pgvector refuses to index beyond 2000 dimensions; the shared setting is
+  // what keeps the OpenRouter and OpenAI legs interchangeable on disk.
+  assert.ok(EMBEDDING_DIMENSIONS <= 2000);
+  for (const env of [{ OPENROUTER_API_KEY: "x" }, { OPENAI_API_KEY: "z" }]) {
+    assert.equal(
+      resolveEmbedder(env as never)?.options.providerOptions.openai.dimensions,
+      EMBEDDING_DIMENSIONS,
+    );
+  }
 });
 
 test("runs record the id that will actually answer", () => {

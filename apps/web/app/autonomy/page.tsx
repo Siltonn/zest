@@ -28,7 +28,7 @@ const ACTIONS = [
     id: "update_memory",
     label: "Update strategy",
     blurb:
-      "Rewrite strategy and learnings after analysis. The brand brief and voice cards always stay under review.",
+      "Rewrite strategy and learnings after analysis. The brand brief and account playbooks always stay under review.",
   },
 ] as const;
 

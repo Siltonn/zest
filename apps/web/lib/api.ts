@@ -250,3 +250,11 @@ export type Workspace = {
   kpiConfig: { goal?: string } | null;
   simNow: string;
 };
+
+/** One row of the workspaces you belong to, as the switcher shows them. */
+export type WorkspaceSummary = {
+  id: string;
+  name: string;
+  role: string;
+  current: boolean;
+};

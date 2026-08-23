@@ -66,7 +66,7 @@ async function bootstrap(): Promise<void> {
   // also an open door — worth one line in the log rather than a surprise later.
   if (env.DEMO_MODE && runsApi(env.MODE)) {
     logger.warn(
-      "DEMO_MODE is on: every request is signed in as the seeded operator and the API needs no credentials. Set DEMO_MODE=false before exposing this instance.",
+      "DEMO_MODE is on: every browser/REST request is signed in as the seeded operator and needs no credentials. (/mcp is the exception — it always requires an API key or OAuth.) Set DEMO_MODE=false before exposing this instance.",
     );
   }
 }

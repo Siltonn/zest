@@ -26,7 +26,13 @@ type NotificationTarget = {
   digestMode: "instant" | "daily";
 };
 
-type ApiKey = { id: string; name: string; lastUsedAt: string | null; key?: string };
+type ApiKey = {
+  id: string;
+  name: string;
+  scopes?: string[];
+  lastUsedAt: string | null;
+  key?: string;
+};
 
 type Webhook = {
   id: string;
@@ -52,6 +58,9 @@ const SCHEDULES = [
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [newKey, setNewKey] = useState<string | null>(null);
+  // `read` is always on; `approve` is the one to hand out deliberately — it is
+  // decision power over the publish queue.
+  const [keyScopes, setKeyScopes] = useState<string[]>(["read", "propose"]);
   const [target, setTarget] = useState({ kind: "slack", value: "" });
   const [webhookUrl, setWebhookUrl] = useState("");
   const [newSecret, setNewSecret] = useState<string | null>(null);
@@ -70,6 +79,9 @@ export default function SettingsPage() {
           provider?: string;
           model?: string | null;
           cheapModel?: string | null;
+          recall?:
+            | { enabled: true; model: string }
+            | { enabled: false; reason: string };
         };
       }>("/me"),
   });
@@ -86,7 +98,11 @@ export default function SettingsPage() {
 
   const update = useMutation({
     mutationFn: (patch: Partial<Workspace>) => api.post("/workspace", patch),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workspace"] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["workspace"] });
+      // A rename shows up in the sidebar switcher too.
+      void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+    },
   });
 
   const addTarget = useMutation({
@@ -110,7 +126,8 @@ export default function SettingsPage() {
   });
 
   const createKey = useMutation({
-    mutationFn: () => api.post<ApiKey>("/api-keys", { name: "MCP client" }),
+    mutationFn: () =>
+      api.post<ApiKey>("/api-keys", { name: "MCP client", scopes: keyScopes }),
     onSuccess: (created) => {
       setNewKey(created.key ?? null);
       void queryClient.invalidateQueries({ queryKey: ["api-keys"] });
@@ -282,6 +299,12 @@ export default function SettingsPage() {
                 <span>
                   triage &amp; simulated audience: {me.capabilities.cheapModel ?? "default"}
                 </span>
+                <span>
+                  chat recall:{" "}
+                  {me.capabilities.recall?.enabled
+                    ? me.capabilities.recall.model
+                    : `off — ${me.capabilities.recall?.reason ?? "not available"}`}
+                </span>
               </div>
             </div>
           ) : (
@@ -381,8 +404,10 @@ export default function SettingsPage() {
         <Card.Header>
           <Card.Title className="text-base">API keys</Card.Title>
           <p className="text-xs opacity-50">
-            How Claude Desktop and other agents connect over MCP. Point them at{" "}
-            <code>/mcp</code> on this instance.
+            For agents that send headers — Claude Code, scripts. Point them at{" "}
+            <code>/mcp</code> on this instance. Claude&apos;s custom connectors
+            need no key: they connect to the same URL over OAuth and act as the
+            user who approves the flow.
           </p>
         </Card.Header>
         <Card.Content className="space-y-3">
@@ -397,17 +422,54 @@ export default function SettingsPage() {
           {keys.map((key) => (
             <div
               key={key.id}
-              className="flex items-center justify-between text-sm opacity-70"
+              className="flex items-center justify-between gap-3 text-sm opacity-70"
             >
               <span>{key.name}</span>
-              <span className="text-xs opacity-60">
-                {key.lastUsedAt ? `used ${relativeTime(key.lastUsedAt)}` : "never used"}
+              <span className="flex items-center gap-2 text-xs opacity-60">
+                {(key.scopes ?? []).length > 0 && (
+                  <span>{(key.scopes ?? []).join(" · ")}</span>
+                )}
+                <span>
+                  {key.lastUsedAt
+                    ? `used ${relativeTime(key.lastUsedAt)}`
+                    : "never used"}
+                </span>
               </span>
             </div>
           ))}
+          <div className="flex flex-wrap items-center gap-2">
+            {(
+              [
+                ["propose", "propose — add work for review"],
+                ["approve", "approve — decide the queue"],
+              ] as const
+            ).map(([scope, label]) => {
+              const on = keyScopes.includes(scope);
+              return (
+                <Button
+                  key={scope}
+                  size="sm"
+                  variant={on ? "secondary" : "ghost"}
+                  onPress={() =>
+                    setKeyScopes((current) =>
+                      on
+                        ? current.filter((s) => s !== scope)
+                        : [...current, scope],
+                    )
+                  }
+                >
+                  {label}
+                </Button>
+              );
+            })}
+          </div>
           <Button size="sm" variant="secondary" onPress={() => createKey.mutate()}>
             Create a key
           </Button>
+          <p className="text-xs opacity-50">
+            Every key can read. Granting the agent autonomy is never a key
+            power — that always takes a signed-in user.
+          </p>
         </Card.Content>
       </Card>
     </div>

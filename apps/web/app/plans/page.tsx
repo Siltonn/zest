@@ -6,6 +6,7 @@ import {
   Chip,
   Input,
   Label,
+  Modal,
   Spinner,
   TextArea,
   ToggleButton,
@@ -94,10 +95,20 @@ export default function PlansPage() {
             Research is shared across them, so the accounts stay coordinated.
           </p>
         </div>
-        <Button onPress={() => setCreating((open) => !open)}>
-          {creating ? "Cancel" : "New plan"}
+        <Button
+          onPress={() => setCreating(true)}
+          isDisabled={accounts.length === 0}
+        >
+          New plan
         </Button>
       </header>
+
+      <NewPlanDialog
+        isOpen={creating}
+        onOpenChange={setCreating}
+        accounts={accounts}
+        onCreated={() => void refresh()}
+      />
 
       {accounts.length === 0 && (
         <Card>
@@ -112,17 +123,7 @@ export default function PlansPage() {
         </Card>
       )}
 
-      {creating && accounts.length > 0 && (
-        <PlanForm
-          accounts={accounts}
-          onDone={() => {
-            setCreating(false);
-            void refresh();
-          }}
-        />
-      )}
-
-      {plans.length === 0 && accounts.length > 0 && !creating ? (
+      {plans.length === 0 && accounts.length > 0 ? (
         <Card>
           <Card.Content className="py-10 text-center">
             <p className="opacity-60">
@@ -147,18 +148,34 @@ export default function PlansPage() {
   );
 }
 
-function PlanForm({
+/**
+ * Creating a plan is a focused decision, not a page state: a dialog keeps the
+ * list visible behind it and cannot be half-left the way an inline form could.
+ */
+function NewPlanDialog({
+  isOpen,
+  onOpenChange,
   accounts,
-  onDone,
+  onCreated,
 }: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
   accounts: Account[];
-  onDone: () => void;
+  onCreated: () => void;
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<"fresh" | "evergreen">("fresh");
   const [objective, setObjective] = useState("");
   const [schedule, setSchedule] = useState("weekly");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const reset = () => {
+    setName("");
+    setKind("fresh");
+    setObjective("");
+    setSchedule("weekly");
+    setSelected(new Set());
+  };
 
   const create = useMutation({
     mutationFn: () =>
@@ -176,105 +193,130 @@ function PlanForm({
             ? "Run it from here whenever you want."
             : `It will run ${schedule}.`,
       });
-      onDone();
+      reset();
+      onOpenChange(false);
+      onCreated();
     },
     onError: (error: Error) =>
       toast.danger("Could not create the plan", { description: error.message }),
   });
 
   return (
-    <Card>
-      <Card.Header>
-        <Card.Title className="text-base">New plan</Card.Title>
-      </Card.Header>
-      <Card.Content className="space-y-4">
-        <div>
-          <Label className="mb-1 block text-sm font-medium">Name</Label>
-          <Input
-            value={name}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
-            placeholder="Launch week, Always-on, Hiring push…"
-          />
-        </div>
+    <Modal isOpen={isOpen} onOpenChange={onOpenChange}>
+      <Modal.Backdrop>
+        <Modal.Container size="lg" scroll="inside">
+          <Modal.Dialog>
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Heading>New plan</Modal.Heading>
+              <p className="text-sm opacity-60">
+                A programme with its own cadence, writing for the accounts it names.
+              </p>
+            </Modal.Header>
+            <Modal.Body className="space-y-4">
+              <div>
+                <Label className="mb-1 block text-sm font-medium">Name</Label>
+                <Input
+                  value={name}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setName(e.target.value)
+                  }
+                  placeholder="Launch week, Always-on, Hiring push…"
+                />
+              </div>
 
-        <div>
-          <ChoiceField
-            label="What kind of programme"
-            value={kind}
-            onChange={(value) => setKind(value)}
-            options={[
-              { id: "fresh", label: "Fresh content", description: "Research → plan → write" },
-              {
-                id: "evergreen",
-                label: "Evergreen re-runs",
-                description: "Re-propose what already worked",
-              },
-            ]}
-            hint={
-              kind === "fresh"
-                ? "Runs on this cadence and needs a model key."
-                : "Re-proposes each account's best published post that has rested 30 days. Measured, not generated — works with no model key, and still goes through your inbox."
-            }
-          />
-        </div>
+              <div>
+                <ChoiceField
+                  label="What kind of programme"
+                  value={kind}
+                  onChange={(value) => setKind(value)}
+                  options={[
+                    {
+                      id: "fresh",
+                      label: "Fresh content",
+                      description: "Research → plan → write",
+                    },
+                    {
+                      id: "evergreen",
+                      label: "Evergreen re-runs",
+                      description: "Re-propose what already worked",
+                    },
+                  ]}
+                  hint={
+                    kind === "fresh"
+                      ? "Runs on this cadence and needs a model key."
+                      : "Re-proposes each account's best published post that has rested 30 days. Measured, not generated — works with no model key, and still goes through your inbox."
+                  }
+                />
+              </div>
 
-        {kind === "fresh" && (
-          <div>
-            <Label className="mb-1 block text-sm font-medium">
-              What is it for{" "}
-              <span className="font-normal opacity-50">— the strategist reads this</span>
-            </Label>
-            <TextArea
-              value={objective}
-              onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-                setObjective(e.target.value)
-              }
-              rows={2}
-              placeholder="Get developers to try the new scheduler, without sounding like a press release."
-            />
-          </div>
-        )}
+              {kind === "fresh" && (
+                <div>
+                  <Label className="mb-1 block text-sm font-medium">
+                    What is it for{" "}
+                    <span className="font-normal opacity-50">
+                      — the strategist reads this
+                    </span>
+                  </Label>
+                  <TextArea
+                    value={objective}
+                    onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
+                      setObjective(e.target.value)
+                    }
+                    rows={2}
+                    placeholder="Get developers to try the new scheduler, without sounding like a press release."
+                  />
+                </div>
+              )}
 
-        <div>
-          <ChoiceField
-            label="Cadence"
-            value={schedule}
-            onChange={setSchedule}
-            options={CADENCES}
-          />
-        </div>
+              <div>
+                <ChoiceField
+                  label="Cadence"
+                  value={schedule}
+                  onChange={setSchedule}
+                  options={CADENCES}
+                />
+              </div>
 
-        <div>
-          <Label className="mb-1.5 block text-sm font-medium">
-            Accounts{" "}
-            <span className="font-normal opacity-50">
-              — pick more than one for a campaign that spans them
-            </span>
-          </Label>
-          <ToggleButtonGroup
-            selectionMode="multiple"
-            selectedKeys={selected}
-            onSelectionChange={(keys) => setSelected(new Set([...keys] as string[]))}
-            size="sm"
-          >
-            {accounts.map((account) => (
-              <ToggleButton key={account.id} id={account.id}>
-                @{account.handle}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-        </div>
-      </Card.Content>
-      <Card.Footer>
-        <Button
-          onPress={() => create.mutate()}
-          isPending={create.isPending}
-          isDisabled={!name.trim() || selected.size === 0}
-        >
-          Create plan
-        </Button>
-      </Card.Footer>
-    </Card>
+              <div>
+                <Label className="mb-1.5 block text-sm font-medium">
+                  Accounts{" "}
+                  <span className="font-normal opacity-50">
+                    — pick more than one for a campaign that spans them
+                  </span>
+                </Label>
+                <ToggleButtonGroup
+                  selectionMode="multiple"
+                  selectedKeys={selected}
+                  onSelectionChange={(keys) =>
+                    setSelected(new Set([...keys] as string[]))
+                  }
+                  size="sm"
+                >
+                  {accounts.map((account) => (
+                    <ToggleButton key={account.id} id={account.id}>
+                      @{account.handle}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </div>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="tertiary" onPress={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button
+                onPress={() => create.mutate()}
+                isPending={create.isPending}
+                isDisabled={!name.trim() || selected.size === 0}
+              >
+                Create plan
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }
 

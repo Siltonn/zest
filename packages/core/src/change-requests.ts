@@ -1,5 +1,5 @@
 import { and, desc, eq, schema, sql, type Database } from "@zest/db";
-import type { Actor, AutonomyAction } from "@zest/shared";
+import { actorUserId, isUserBacked, type Actor, type AutonomyAction } from "@zest/shared";
 import * as autonomy from "./autonomy.ts";
 import * as memory from "./memory.ts";
 
@@ -99,6 +99,30 @@ export async function approve(
   id: string,
   actor: Actor,
 ): Promise<{ kind: string; applied: string }> {
+  // Checked before the claim, so a refused grant leaves the request pending
+  // for a person to decide rather than half-approved.
+  const [pending] = await db
+    .select({ kind: schema.changeRequests.kind })
+    .from(schema.changeRequests)
+    .where(
+      and(
+        eq(schema.changeRequests.id, id),
+        eq(schema.changeRequests.workspaceId, workspaceId),
+        eq(schema.changeRequests.status, "pending"),
+      ),
+    );
+  if (!pending) throw new Error("That request has already been decided");
+
+  // An autonomy request is the agent asking to act without review. Approving
+  // it must trace to a person — a session, or an MCP token a user authorized.
+  // A standing machine credential (API key, agent, system) granting it would
+  // be the exact escalation the review gate exists to prevent.
+  if (pending.kind === "autonomy" && !isUserBacked(actor)) {
+    throw new Error(
+      "Granting autonomy requires a signed-in user. API keys cannot approve autonomy requests — use the web inbox, or connect over MCP with a user-authorized OAuth session.",
+    );
+  }
+
   const [claimed] = await db
     .update(schema.changeRequests)
     .set({
@@ -136,7 +160,9 @@ export async function approve(
     mode: "auto",
     connectorId: payload.connectorId ?? undefined,
     accountId: payload.accountId ?? undefined,
-    grantedBy: actor.kind === "human" ? actor.userId : actorLabel(actor),
+    // The gate above guarantees a user stands behind this actor.
+    grantedBy: actorUserId(actor) ?? actorLabel(actor),
+    actor,
   });
   await record(db, workspaceId, claimed, actor, "approve_autonomy_request");
   return { kind: "autonomy", applied: payload.action };

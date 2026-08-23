@@ -1,7 +1,6 @@
 export * as analytics from "./analytics.ts";
 export * as approvals from "./approvals.ts";
 export * as audit from "./audit.ts";
-export * as conversations from "./conversations.ts";
 export * as autonomy from "./autonomy.ts";
 export * as changeRequests from "./change-requests.ts";
 export * as media from "./media.ts";

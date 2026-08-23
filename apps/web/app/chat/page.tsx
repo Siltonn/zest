@@ -4,7 +4,8 @@ import { Avatar, Button, Card, Chip, Skeleton, TextArea } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { api, type InboxItem } from "@/lib/api";
-import { ChatIcon, ComposeIcon, ZestMark } from "@/components/icons";
+import { ChatIcon, ComposeIcon, MemoryIcon, ZestMark } from "@/components/icons";
+import { ConfirmButton } from "@/components/confirm-button";
 import { relativeTime } from "@/lib/format";
 
 type Message = {
@@ -46,6 +47,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: history = [] } = useQuery({
     queryKey: ["conversations"],
@@ -76,6 +78,8 @@ export default function ChatPage() {
       });
       // A proposal made in chat also lands in the inbox badge.
       void queryClient.invalidateQueries({ queryKey: ["inbox-count"] });
+      // The turn may have updated the assistant's notes.
+      void queryClient.invalidateQueries({ queryKey: ["assistant-notes"] });
     },
     onError: () => setPending(null),
   });
@@ -86,23 +90,40 @@ export default function ChatPage() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, pending]);
 
+  // Grow with the draft up to ~9 lines, then scroll inside the box. Empty
+  // means no inline height at all — measuring an empty textarea on mount reads
+  // the placeholder mid-layout and freezes a wrong height in.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (!input) {
+      el.style.height = "";
+      return;
+    }
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+  }, [input]);
+
   const submit = (text?: string) => {
     const message = (text ?? input).trim();
     if (!message || send.isPending) return;
     setInput("");
     setPending(message);
     send.mutate(message);
+    // Pressing Send moves focus to the button; typing should not need a click.
+    inputRef.current?.focus();
   };
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-9rem)] max-w-none gap-5">
-      <aside className="hidden w-60 shrink-0 flex-col lg:flex">
+    <div className="flex h-full min-h-0">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-default-200/50 p-3 lg:flex">
         <Button
           variant="secondary"
           className="mb-3 w-full"
           onPress={() => {
             setConversationId(null);
             setInput("");
+            inputRef.current?.focus();
           }}
         >
           <ComposeIcon className="size-4" />
@@ -130,47 +151,56 @@ export default function ChatPage() {
             </button>
           ))}
         </div>
+
+        <AssistantNotes />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-3xl space-y-6 pb-6">
-            {messages.length === 0 && !pending ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 sm:px-6">
+          {messages.length === 0 && !pending ? (
+            // Centered in the viewport, not parked at the top of an empty page.
+            <div className="flex min-h-full items-center justify-center py-6">
               <Welcome onPick={submit} />
-            ) : (
-              messages.map((message) => (
+            </div>
+          ) : (
+            <div className="mx-auto w-full max-w-3xl space-y-6 py-6">
+              {messages.map((message) => (
                 <MessageRow key={message.id} message={message} />
-              ))
-            )}
+              ))}
 
-            {pending && (
-              <>
-                <MessageRow
-                  message={{
-                    id: "pending-user",
-                    role: "user",
-                    content: pending,
-                    toolCalls: [],
-                    proposals: [],
-                    agentRunId: null,
-                    createdAt: new Date().toISOString(),
-                  }}
-                />
-                <Thinking />
-              </>
-            )}
+              {pending && (
+                <>
+                  <MessageRow
+                    message={{
+                      id: "pending-user",
+                      role: "user",
+                      content: pending,
+                      toolCalls: [],
+                      proposals: [],
+                      agentRunId: null,
+                      createdAt: new Date().toISOString(),
+                    }}
+                  />
+                  <Thinking />
+                </>
+              )}
 
-            {send.isError && (
-              <p className="text-sm text-danger">{(send.error as Error).message}</p>
-            )}
-            <div ref={endRef} />
-          </div>
+              {send.isError && (
+                <p className="text-sm text-danger">{(send.error as Error).message}</p>
+              )}
+              <div ref={endRef} />
+            </div>
+          )}
         </div>
 
-        <div className="mx-auto w-full max-w-3xl pt-2">
-          <div className="rounded-2xl border border-default-200/60 bg-default-50/40 p-2">
+        {/* Pinned to the bottom of the screen — the page does not scroll, the
+            thread does. */}
+        <div className="px-4 pb-4 pt-2 sm:px-6">
+          <div className="mx-auto w-full max-w-3xl rounded-2xl border border-default-200/60 bg-default-50/40 p-2">
             <TextArea
+              ref={inputRef}
               value={input}
+              autoFocus
               onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
               onKeyDown={(e: KeyboardEvent<HTMLTextAreaElement>) => {
                 // Enter sends; shift+enter is a newline, as everywhere else.
@@ -179,9 +209,9 @@ export default function ChatPage() {
                   submit();
                 }
               }}
-              rows={2}
+              rows={1}
               placeholder="Ask for a plan, a draft, or an explanation…"
-              className="border-0 bg-transparent"
+              className="max-h-[220px] resize-none border-0 bg-transparent"
             />
             <div className="flex items-center justify-between px-1 pt-1">
               <span className="text-xs opacity-55">
@@ -203,9 +233,74 @@ export default function ChatPage() {
   );
 }
 
+/**
+ * The assistant's notepad, in the open.
+ *
+ * Working memory rides invisibly inside the agent's prompts — preferences,
+ * current focus, open loops it keeps across conversations. A product built on
+ * "nothing happens behind your back" does not get to keep an invisible
+ * memory, so the notes are readable here and wipeable in one action. Editing
+ * them is deliberately not offered: the notepad is the agent's own record of
+ * what it was told; correcting it happens by telling it, in chat.
+ */
+function AssistantNotes() {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const { data } = useQuery({
+    queryKey: ["assistant-notes"],
+    queryFn: () => api.get<{ notes: string | null }>("/chat/notes"),
+  });
+
+  const forget = useMutation({
+    mutationFn: () => api.delete("/chat/notes"),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["assistant-notes"] }),
+  });
+
+  const notes = data?.notes ?? null;
+
+  return (
+    <div className="mt-3 border-t border-default-200/50 pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm opacity-75 transition-colors hover:bg-default-100 hover:opacity-100"
+      >
+        <MemoryIcon className="size-4 shrink-0" />
+        <span className="flex-1">Assistant notes</span>
+        <span className="text-xs opacity-55">{open ? "Hide" : "Show"}</span>
+      </button>
+
+      {open &&
+        (notes ? (
+          <div className="mt-1 space-y-2 px-1">
+            <pre className="max-h-56 overflow-y-auto whitespace-pre-wrap rounded-lg bg-default-100/60 p-2.5 font-sans text-xs leading-relaxed opacity-80">
+              {notes}
+            </pre>
+            <ConfirmButton
+              label="Forget these notes"
+              title="Forget the assistant's notes?"
+              body="Preferences, current focus and open loops it noted across your conversations are erased. It starts a fresh page — brand memory on the Memory page is untouched."
+              confirmLabel="Forget"
+              onConfirm={() => forget.mutate()}
+              isPending={forget.isPending}
+            />
+          </div>
+        ) : (
+          <p className="mt-1 px-3.5 text-xs leading-relaxed opacity-55">
+            Nothing yet. As you chat, the assistant keeps short notes here — how
+            you like to work, what you are focused on — and carries them into
+            every conversation.
+          </p>
+        ))}
+    </div>
+  );
+}
+
 function Welcome({ onPick }: { onPick: (text: string) => void }) {
   return (
-    <div className="pt-10">
+    <div className="w-full max-w-2xl">
       <div className="mb-6 text-center">
         <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-accent text-accent-foreground">
           <ZestMark className="size-6" />

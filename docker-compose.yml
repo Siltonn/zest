@@ -1,6 +1,10 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    # The pgvector build of the same Postgres major: the assistant's semantic
+    # recall needs the `vector` extension, which the stock image does not ship.
+    # Same data directory layout, so an existing postgres-data volume carries
+    # over; without the extension the server still boots, with recall off.
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_USER: zest
       POSTGRES_PASSWORD: zest
@@ -53,8 +57,10 @@ services:
       REDIS_URL: redis://redis:6379
       ZEST_ENCRYPTION_KEY: ${ZEST_ENCRYPTION_KEY:-dev-encryption-key-change-me}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-auth-secret-change-me}
-      BETTER_AUTH_URL: http://localhost:4000
-      WEB_URL: http://localhost:3000
+      # Auth and OAuth discovery live behind the web proxy, so their public
+      # address is the web origin. Point this at the real hostname when you
+      # deploy; BETTER_AUTH_URL follows it unless you set that one too.
+      WEB_URL: ${WEB_URL:-http://localhost:3000}
       DEMO_MODE: ${DEMO_MODE:-true}
       # Spelled out rather than left to the NODE_ENV default: this is the file
       # people copy to deploy from, and a queue dashboard that can drain

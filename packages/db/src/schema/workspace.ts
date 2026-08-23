@@ -25,8 +25,10 @@ export const workspaces = pgTable("workspaces", {
 
 /**
  * Agent memory as versioned markdown. Workspace docs hold the brand facts and
- * strategy; an account-scoped `persona` card keeps each connected handle in its
- * own voice, so a founder account never drifts into the brand account's tone.
+ * strategy; per account there is one `persona` playbook (voice, positioning,
+ * pillars, red lines) plus optionally account-scoped `learnings`. Which kinds
+ * may take an accountId is enforced by `assertMemoryScope` in @zest/core, not
+ * here — the column stays kind-agnostic.
  */
 export const memoryDocs = pgTable(
   "memory_docs",

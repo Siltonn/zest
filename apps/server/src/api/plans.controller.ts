@@ -19,7 +19,11 @@ import { hasModelAccess } from "@zest/agent";
 import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
 import { QUEUE_AGENT_RUN } from "../queue/queue.constants.js";
-import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
+import {
+  requireScope,
+  WorkspaceGuard,
+  type AuthedRequest,
+} from "../auth/workspace.guard.js";
 import { PlanningScheduler } from "../worker/planning.scheduler.js";
 
 /**
@@ -78,6 +82,7 @@ export class PlansController {
     @Param("itemId") itemId: string,
     @Body() body: unknown,
   ) {
+    requireScope(req, "propose");
     const { suggestedSlotAt, ...rest } = z
       .object({
         topic: z.string().min(1).optional(),
@@ -107,10 +112,15 @@ export class PlansController {
    */
   @Post(":id/approve")
   async approvePlan(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireScope(req, "approve");
     const found = await plans.readPlan(this.db, req.workspaceId, id);
     if (!found) throw new NotFoundException("No such plan");
 
-    const accountIds = await plans.accountsWithPendingItems(this.db, id);
+    const accountIds = await plans.accountsWithPendingItems(
+      this.db,
+      req.workspaceId,
+      id,
+    );
     if (accountIds.length === 0) {
       throw new BadRequestException("Nothing is waiting to be written on this plan");
     }
@@ -138,6 +148,7 @@ export class PlansController {
   /** Reject the whole week — skip every unwritten item at once. */
   @Post(":id/reject")
   async rejectPlan(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireScope(req, "approve");
     const found = await plans.readPlan(this.db, req.workspaceId, id);
     if (!found) throw new NotFoundException("No such plan");
 
@@ -161,6 +172,7 @@ export class PlansController {
   /** Drop an item before anyone writes it — the cheap end of review. */
   @Post("items/:itemId/skip")
   async skipItem(@Req() req: AuthedRequest, @Param("itemId") itemId: string) {
+    requireScope(req, "approve");
     await plans.skipItem(this.db, req.workspaceId, itemId);
     return { ok: true };
   }
@@ -174,6 +186,7 @@ export class PlansController {
 
   @Post()
   async create(@Req() req: AuthedRequest, @Body() body: unknown) {
+    requireScope(req, "propose");
     const input = planInput.parse(body);
     const plan = await plans.createPlan(this.db, {
       workspaceId: req.workspaceId,
@@ -195,6 +208,7 @@ export class PlansController {
     @Param("id") id: string,
     @Body() body: unknown,
   ) {
+    requireScope(req, "propose");
     const { startsAt, endsAt, ...rest } = planPatch.parse(body);
     try {
       const plan = await plans.updatePlan(this.db, req.workspaceId, id, {
@@ -215,6 +229,7 @@ export class PlansController {
 
   @Delete(":id")
   async remove(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireScope(req, "approve");
     await this.scheduler.remove(id);
     await plans.deletePlan(this.db, req.workspaceId, id);
     return { ok: true };
@@ -223,6 +238,7 @@ export class PlansController {
   /** Run this programme now: research first, then its strategist, then writers. */
   @Post(":id/run")
   async run(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireScope(req, "propose");
     const found = await plans.readPlan(this.db, req.workspaceId, id);
     if (!found) throw new NotFoundException("No such plan");
     if (found.accountIds.length === 0) {
@@ -245,10 +261,13 @@ export class PlansController {
       );
     }
 
-    const job = await this.agentQueue.add("plan-research", {
-      workspaceId: req.workspaceId,
-      planId: id,
-    });
+    const job = await this.agentQueue.add(
+      "plan-cycle",
+      { workspaceId: req.workspaceId, planId: id },
+      // attempts: 1 — a retried cycle would run the strategist twice and
+      // double the plan; failures are contained per stage in the workflow.
+      { attempts: 1 },
+    );
     return { queued: true, jobId: job.id };
   }
 

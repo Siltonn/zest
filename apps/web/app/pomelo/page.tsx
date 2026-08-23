@@ -11,6 +11,7 @@ import {
 } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import NextLink from "next/link";
+import { FastForwardButton } from "@/components/fast-forward-button";
 import { compactNumber, relativeTime } from "@/lib/format";
 
 type FeedPost = {
@@ -61,15 +62,17 @@ export default function PomeloPage() {
 
   return (
     <div className="mx-auto max-w-none">
-      <header className="mb-6 flex items-center gap-3">
+      <header className="mb-6 flex flex-wrap items-center gap-3">
         <span className="text-3xl">🍊</span>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold tracking-tight">Pomelo</h1>
           <p className="text-sm opacity-60">
             A social network that ships inside Zest. Its residents react to what you
             post — no API keys, no rate limits, no waiting for approval.
           </p>
         </div>
+        {/* The clock control lives with the network it controls. */}
+        <FastForwardButton />
       </header>
 
       <div className="flex gap-6">

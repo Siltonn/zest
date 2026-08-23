@@ -6,3 +6,11 @@ allowBuilds:
   esbuild: true
   # optional native msgpack acceleration for BullMQ job payloads
   msgpackr-extract: true
+minimumReleaseAgeExclude:
+  - '@mastra/core@1.60.0'
+  - '@mastra/deployer@1.60.0'
+  - '@mastra/memory@1.27.0'
+  - '@mastra/observability@1.17.1'
+  - '@mastra/pg@1.21.0'
+  - '@mastra/server@1.60.0'
+  - mastra@1.25.1

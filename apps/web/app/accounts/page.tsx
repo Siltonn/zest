@@ -122,7 +122,7 @@ export default function AccountsPage() {
                   <ConfirmButton
                     label="Disconnect"
                     title={`Disconnect @${account.handle}?`}
-                    body="Its voice card, scheduled posts and plan assignments go with it. Published posts stay on the platform."
+                    body="Its playbook, scheduled posts and plan assignments go with it. Published posts stay on the platform."
                     confirmLabel="Disconnect"
                     onConfirm={() => disconnect.mutate(account.id)}
                   />

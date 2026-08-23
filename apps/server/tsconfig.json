@@ -6,6 +6,11 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
+    // An app, not a library: nothing imports its types, and declaration emit
+    // chokes on Better Auth plugin types that are structurally present but not
+    // exported by name (TS4058).
+    "declaration": false,
+    "declarationMap": false,
     // `nest build` deletes dist on every run. Combined with incremental builds
     // tsc would see an up-to-date .tsbuildinfo, skip emitting, and leave dist
     // empty — a silent no-op build. Not worth the seconds it saves.

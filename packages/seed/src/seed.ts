@@ -1,7 +1,8 @@
 import { randomBytes, createHash, scryptSync } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { hashPassword, verifyPassword } from "better-auth/crypto";
 import { createDatabase } from "@zest/db";
-import { schema } from "@zest/db";
+import { schema, type Database } from "@zest/db";
 
 /**
  * Seeds a workspace that is immediately demonstrable: a brand with a voice,
@@ -38,17 +39,8 @@ async function main(): Promise<void> {
       email: DEMO_EMAIL,
       emailVerified: true,
     });
-    // Better Auth stores a scrypt hash as salt:key.
-    const salt = randomBytes(16).toString("hex");
-    const key = scryptSync(DEMO_PASSWORD, salt, 64).toString("hex");
-    await db.insert(schema.accounts).values({
-      id: `acct_${randomBytes(8).toString("hex")}`,
-      userId,
-      accountId: userId,
-      providerId: "credential",
-      password: `${salt}:${key}`,
-    });
   }
+  const credential = await ensureDemoCredential(db, userId);
 
   // ── Workspace ─────────────────────────────────────────────────────────
   const [existingWorkspace] = await db.select().from(schema.workspaces).limit(1);
@@ -356,14 +348,124 @@ points is a coincidence, not a pattern.`,
       workspaceId: workspace.id,
       name: "Demo key (MCP)",
       hashedKey: createHash("sha256").update(secret).digest("hex"),
-      scopes: ["read", "write"],
+      // Full power on purpose — the demo shows the whole approve-over-MCP
+      // loop. (Autonomy grants still need a signed-in user; no key has that.)
+      scopes: ["read", "propose", "approve"],
     });
     console.info(`  API key for MCP: ${secret}`);
   }
 
-  console.info(`\nReady. Sign in as ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
+  // Says what is actually true: `ensureDemoCredential` has already proved the
+  // password works, or told us someone replaced it with their own.
+  console.info(
+    credential === "custom"
+      ? `\nReady. Sign in as ${DEMO_EMAIL} with the password you set for it.`
+      : `\nReady. Sign in as ${DEMO_EMAIL} / ${DEMO_PASSWORD}`,
+  );
   console.info("Open http://localhost:3000\n");
   process.exit(0);
+}
+
+/**
+ * What happened to the demo password on this database.
+ *
+ * `custom` means somebody replaced it deliberately — the one case where the
+ * seed must not touch it, and must stop promising a password it does not know.
+ */
+type CredentialState = "created" | "repaired" | "verified" | "custom";
+
+/**
+ * Makes `Sign in as demo@zest.local / zestdemo` true, rather than hoping.
+ *
+ * The first version of this hashed the password itself with Node's
+ * `scryptSync` defaults — which use r=8, while Better Auth verifies with r=16.
+ * Everything about the stored value looked right (hex salt, `salt:key`, same
+ * N, p and key length), so nothing errored; the hash simply never matched, and
+ * DEMO_MODE hid it by signing every request in without going through sign-in
+ * at all. The lesson is not "use the right cost" but "do not re-implement
+ * someone else's KDF": this now calls Better Auth's own hasher, so it follows
+ * along if that ever changes.
+ */
+async function ensureDemoCredential(
+  db: Database,
+  userId: string,
+): Promise<CredentialState> {
+  const [existing] = await db
+    .select()
+    .from(schema.accounts)
+    .where(
+      and(
+        eq(schema.accounts.userId, userId),
+        eq(schema.accounts.providerId, "credential"),
+      ),
+    );
+
+  if (!existing) {
+    await db.insert(schema.accounts).values({
+      id: `acct_${randomBytes(8).toString("hex")}`,
+      userId,
+      accountId: userId,
+      providerId: "credential",
+      password: await hashPassword(DEMO_PASSWORD),
+    });
+    await assertSignInWorks(db, userId);
+    return "created";
+  }
+
+  if (
+    existing.password &&
+    (await verifyPassword({ hash: existing.password, password: DEMO_PASSWORD }))
+  ) {
+    return "verified";
+  }
+
+  // Rewrite only a hash this seed's older self produced. Anything else is a
+  // password someone chose, and resetting it would be the seed overreaching.
+  if (!existing.password || !isLegacyHash(existing.password)) return "custom";
+
+  await db
+    .update(schema.accounts)
+    .set({ password: await hashPassword(DEMO_PASSWORD) })
+    .where(eq(schema.accounts.id, existing.id));
+  await assertSignInWorks(db, userId);
+  console.info("  repaired the demo password (it was hashed at the wrong scrypt cost)");
+  return "repaired";
+}
+
+/** Was this written by the old seed — scrypt at Node's default r=8? */
+function isLegacyHash(stored: string): boolean {
+  const [salt, key] = stored.split(":");
+  if (!salt || !key) return false;
+  try {
+    return scryptSync(DEMO_PASSWORD, salt, 64).toString("hex") === key;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reads the row back and verifies it the way the login endpoint will. Cheap,
+ * and it is the check whose absence let the broken hash ship.
+ */
+async function assertSignInWorks(db: Database, userId: string): Promise<void> {
+  const [saved] = await db
+    .select()
+    .from(schema.accounts)
+    .where(
+      and(
+        eq(schema.accounts.userId, userId),
+        eq(schema.accounts.providerId, "credential"),
+      ),
+    );
+  const ok =
+    saved?.password &&
+    (await verifyPassword({ hash: saved.password, password: DEMO_PASSWORD }));
+  if (!ok) {
+    throw new Error(
+      `The demo credential does not verify, so signing in as ${DEMO_EMAIL} would fail. ` +
+        "This is a bug in the seed, not in your database.",
+    );
+  }
 }
 
 void main().catch((error) => {

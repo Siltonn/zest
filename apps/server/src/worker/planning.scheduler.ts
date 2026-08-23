@@ -87,7 +87,14 @@ export class PlanningScheduler implements OnModuleInit {
     await this.queue.upsertJobScheduler(
       key,
       { pattern },
-      { name: "plan-research", data: { workspaceId, planId } },
+      {
+        name: "plan-cycle",
+        data: { workspaceId, planId },
+        // Never retried whole: the strategist and copywriter write rows, so a
+        // second pass doubles the plan. Failures are contained per stage
+        // inside the workflow and recorded on their run rows.
+        opts: { attempts: 1 },
+      },
     );
     this.logger.log(`plan ${planId}: ${schedule} (${pattern})`);
   }

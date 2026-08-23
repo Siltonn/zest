@@ -180,6 +180,18 @@ export const MonitorIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const PlusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Icon>
+);
+
+export const ChevronUpDownIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m8 9.5 4-4 4 4M8 14.5l4 4 4-4" />
+  </Icon>
+);
+
 export const CheckIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="m4.5 12.5 5 5 10-11" />

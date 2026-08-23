@@ -6,7 +6,7 @@ import {
   type ExceptionFilter,
 } from "@nestjs/common";
 import type { Response } from "express";
-import { InvalidTransitionError } from "@zest/core";
+import { InvalidTransitionError, memory } from "@zest/core";
 
 /**
  * Domain rules rejecting a request are a client error, not a crash.
@@ -30,7 +30,10 @@ export class DomainErrorFilter implements ExceptionFilter {
       return;
     }
 
-    if (exception instanceof InvalidTransitionError) {
+    if (
+      exception instanceof InvalidTransitionError ||
+      exception instanceof memory.MemoryScopeError
+    ) {
       response.status(400).json({
         statusCode: 400,
         error: "Bad Request",

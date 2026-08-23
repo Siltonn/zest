@@ -1,8 +1,16 @@
 "use client";
 
-import { Avatar, ListBox, ListBoxItem, Select } from "@heroui/react";
+import {
+  Avatar,
+  Header,
+  ListBox,
+  ListBoxItem,
+  ListBoxSection,
+  Select,
+} from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type Account } from "@/lib/api";
+import { TeamIcon } from "./icons";
 
 /**
  * Choosing which account you are looking at.
@@ -12,6 +20,10 @@ import { api, type Account } from "@/lib/api";
  * end. A select stays one control at any count, shows the avatar and platform
  * so two similar handles are still distinguishable, and keeps the workspace
  * option first where it belongs.
+ *
+ * When the workspace option is present, the list is grouped into a Workspace
+ * and an Accounts section: the workspace row is a different kind of thing from
+ * an account, and a flat list read as if it were just another handle.
  */
 
 export const WORKSPACE = "__workspace__";
@@ -21,6 +33,42 @@ export function useAccounts() {
     queryKey: ["accounts"],
     queryFn: () => api.get<Account[]>("/accounts"),
   });
+}
+
+/** The workspace's stand-in for an avatar, so rows and trigger stay aligned. */
+function WorkspaceMark({ className }: { className: string }) {
+  return (
+    <span
+      className={`flex shrink-0 items-center justify-center rounded-full bg-default-100 ${className}`}
+    >
+      <TeamIcon className="size-[55%] opacity-70" />
+    </span>
+  );
+}
+
+function AccountOption({ account }: { account: Account }) {
+  return (
+    <ListBoxItem id={account.id} textValue={`@${account.handle}`}>
+      <div className="flex items-center gap-2">
+        <Avatar className="size-6 shrink-0">
+          {account.avatarUrl ? (
+            <Avatar.Image src={account.avatarUrl} alt="" />
+          ) : (
+            <Avatar.Fallback className="text-[10px]">
+              {account.handle.slice(0, 2)}
+            </Avatar.Fallback>
+          )}
+        </Avatar>
+        <div className="min-w-0">
+          <div className="truncate font-medium">@{account.handle}</div>
+          {/* Two accounts on different platforms can share a handle. */}
+          <div className="text-xs opacity-55">
+            {account.platform?.name ?? account.connectorId}
+          </div>
+        </div>
+      </div>
+    </ListBoxItem>
+  );
 }
 
 export function AccountSwitcher({
@@ -66,50 +114,41 @@ export function AccountSwitcher({
               <span className="truncate">@{current.handle}</span>
             </>
           ) : (
-            <span className="truncate">{workspaceLabel ?? "Whole workspace"}</span>
+            <>
+              <WorkspaceMark className="size-5" />
+              <span className="truncate">{workspaceLabel ?? "Whole workspace"}</span>
+            </>
           )}
         </span>
       </Select.Trigger>
       <Select.Popover>
         <ListBox>
-          {[
-            ...(workspaceLabel
-              ? [
-                  <ListBoxItem key={WORKSPACE} id={WORKSPACE} textValue={workspaceLabel}>
-                    <div className="font-medium">{workspaceLabel}</div>
-                    <div className="text-xs opacity-55">
-                      Shared by every account
+          {workspaceLabel
+            ? [
+                <ListBoxSection key="workspace">
+                  <Header>Workspace</Header>
+                  <ListBoxItem id={WORKSPACE} textValue={workspaceLabel}>
+                    <div className="flex items-center gap-2">
+                      <WorkspaceMark className="size-6" />
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{workspaceLabel}</div>
+                        <div className="text-xs opacity-55">
+                          Shared by every account
+                        </div>
+                      </div>
                     </div>
-                  </ListBoxItem>,
-                ]
-              : []),
-            ...accounts.map((account) => (
-              <ListBoxItem
-                key={account.id}
-                id={account.id}
-                textValue={`@${account.handle}`}
-              >
-                <div className="flex items-center gap-2">
-                  <Avatar className="size-6 shrink-0">
-                    {account.avatarUrl ? (
-                      <Avatar.Image src={account.avatarUrl} alt="" />
-                    ) : (
-                      <Avatar.Fallback className="text-[10px]">
-                        {account.handle.slice(0, 2)}
-                      </Avatar.Fallback>
-                    )}
-                  </Avatar>
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">@{account.handle}</div>
-                    {/* Two accounts on different platforms can share a handle. */}
-                    <div className="text-xs opacity-55">
-                      {account.platform?.name ?? account.connectorId}
-                    </div>
-                  </div>
-                </div>
-              </ListBoxItem>
-            )),
-          ]}
+                  </ListBoxItem>
+                </ListBoxSection>,
+                <ListBoxSection key="accounts" className="mt-1">
+                  <Header>Accounts</Header>
+                  {accounts.map((account) => (
+                    <AccountOption key={account.id} account={account} />
+                  ))}
+                </ListBoxSection>,
+              ]
+            : accounts.map((account) => (
+                <AccountOption key={account.id} account={account} />
+              ))}
         </ListBox>
       </Select.Popover>
     </Select>

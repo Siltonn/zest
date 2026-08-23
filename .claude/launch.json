@@ -7,6 +7,20 @@
       "runtimeArgs": ["--filter", "@zest/web", "dev"],
       "port": 3000,
       "autoPort": false
+    },
+    {
+      "name": "server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@zest/server", "dev"],
+      "port": 4000,
+      "autoPort": false
+    },
+    {
+      "name": "studio",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["studio"],
+      "port": 4111,
+      "autoPort": false
     }
   ]
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, Chip, Separator, Spinner, Tooltip, toast } from "@heroui/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button, Chip, Separator, Spinner, Tooltip } from "@heroui/react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type ComponentType, type ReactNode, type SVGProps } from "react";
@@ -9,6 +9,7 @@ import { api, type Workspace } from "@/lib/api";
 import { useLiveEvents } from "@/lib/events";
 import { relativeTime } from "@/lib/format";
 import { UserMenu } from "./user-menu";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 import {
   AccountsIcon,
   AuditIcon,
@@ -18,7 +19,6 @@ import {
   ChatIcon,
   ComposeIcon,
   DashboardIcon,
-  ForwardIcon,
   InboxIcon,
   LabIcon,
   MemoryIcon,
@@ -72,6 +72,13 @@ const GROUPS: { label: string; items: NavItem[] }[] = [
   },
 ];
 
+/**
+ * Routes that own their scrolling and pin content to the viewport edge —
+ * chat's composer belongs at the bottom of the screen, not floating above a
+ * page gutter.
+ */
+const FULL_BLEED = ["/chat"];
+
 const TITLES: Record<string, string> = {
   "/": "Dashboard",
   "/inbox": "Inbox",
@@ -90,7 +97,6 @@ const TITLES: Record<string, string> = {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const queryClient = useQueryClient();
   const { connected, activity, lastRun } = useLiveEvents();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -105,30 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     refetchInterval: 30_000,
   });
 
-  const fastForward = useMutation({
-    mutationFn: () =>
-      api.post<{ released: number; replies: number }>("/simulator/fast-forward", {
-        days: 1,
-      }),
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries();
-      // An action with no visible result has to say what it did, or it reads
-      // as a broken button.
-      toast.success(
-        result.released > 0
-          ? `A day passed on Pomelo — ${result.released} reactions`
-          : "A day passed on Pomelo",
-        {
-          description:
-            result.released > 0
-              ? `${result.replies} of them were replies. Metrics are updating.`
-              : "Nothing was waiting to happen. Publish something first, then fast-forward.",
-        },
-      );
-    },
-    onError: (error: Error) =>
-      toast.danger("Could not advance the clock", { description: error.message }),
-  });
+  const fullBleed = FULL_BLEED.some((route) => pathname.startsWith(route));
 
   const section = GROUPS.find((group) =>
     group.items.some((item) =>
@@ -160,9 +143,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           {!collapsed && (
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold leading-tight">Zest</div>
-              <div className="truncate text-xs leading-tight opacity-50">
-                {workspace?.name ?? "…"}
-              </div>
+              {/* The workspace line doubles as the way to another workspace. */}
+              <WorkspaceSwitcher currentName={workspace?.name} />
             </div>
           )}
         </div>
@@ -229,26 +211,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="space-y-2 px-3 pb-3">
           <Separator className="opacity-55" />
           <UserMenu collapsed={collapsed} />
-          <Tooltip delay={300}>
-            <Tooltip.Trigger>
-              <Button
-                variant="secondary"
-                className="w-full"
-                isPending={fastForward.isPending}
-                onPress={() => fastForward.mutate()}
-              >
-                <ForwardIcon className="size-4" />
-                {!collapsed && "Fast-forward a day"}
-              </Button>
-            </Tooltip.Trigger>
-            <Tooltip.Content className="max-w-64">
-              <p className="text-xs leading-relaxed">
-                Advances Pomelo's clock by a day so a published post's audience
-                reacts now instead of over the next 48 hours. Only affects the
-                simulated network — real platforms keep real time.
-              </p>
-            </Tooltip.Content>
-          </Tooltip>
           {!collapsed && (
             <div className="flex items-center gap-1.5 px-1 text-xs opacity-55">
               <span
@@ -296,29 +258,35 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-[1600px] gap-6 px-8 py-6">
-            <div className="min-w-0 flex-1">{children}</div>
+        {fullBleed ? (
+          <div className="min-h-0 flex-1">{children}</div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto flex w-full max-w-[1600px] gap-6 px-8 py-6">
+              <div className="min-w-0 flex-1">{children}</div>
 
-            {activity.length > 0 && (
-              <aside className="hidden w-60 shrink-0 2xl:block">
-                <div className="sticky top-0">
-                  <div className="mb-2 text-xs font-medium opacity-55">Activity</div>
-                  <div className="space-y-2.5">
-                    {activity.slice(0, 12).map((item) => (
-                      <div key={item.id} className="text-sm">
-                        <div className="leading-snug opacity-80">{item.label}</div>
-                        <div className="text-xs opacity-35">
-                          {relativeTime(item.at)}
+              {activity.length > 0 && (
+                <aside className="hidden w-60 shrink-0 2xl:block">
+                  <div className="sticky top-0">
+                    <div className="mb-2 text-xs font-medium opacity-55">
+                      Activity
+                    </div>
+                    <div className="space-y-2.5">
+                      {activity.slice(0, 12).map((item) => (
+                        <div key={item.id} className="text-sm">
+                          <div className="leading-snug opacity-80">{item.label}</div>
+                          <div className="text-xs opacity-35">
+                            {relativeTime(item.at)}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </aside>
-            )}
+                </aside>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

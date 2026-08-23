@@ -18,7 +18,13 @@ const envSchema = z.object({
   REDIS_URL: z.string().default("redis://localhost:6379"),
   ZEST_ENCRYPTION_KEY: z.string().min(16),
   BETTER_AUTH_SECRET: z.string().min(16),
-  BETTER_AUTH_URL: z.string().default("http://localhost:4000"),
+  /**
+   * The URL auth lives at *from a browser's point of view*. Everything reaches
+   * the server through the web app's same-origin proxy, so this defaults to
+   * WEB_URL — it is also the OAuth issuer MCP clients discover, so on a real
+   * deployment it must be the public origin, not an internal address.
+   */
+  BETTER_AUTH_URL: z.string().optional(),
   WEB_URL: z.string().default("http://localhost:3000"),
   /** Where uploaded images live. Mount this as a volume in a container. */
   MEDIA_DIR: z.string().default("./media"),
@@ -111,6 +117,10 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
 export const runsApi = (mode: ServerMode): boolean => mode === "api" || mode === "all";
 export const runsWorker = (mode: ServerMode): boolean =>
   mode === "worker" || mode === "all";
+
+/** Where this instance lives publicly — the base for OAuth discovery URLs. */
+export const publicBaseUrl = (env: Env): string =>
+  (env.BETTER_AUTH_URL ?? env.WEB_URL).replace(/\/$/, "");
 
 /** Local development gets to act on the queues; a deployed instance only looks. */
 export const cockpitReadonly = (env: Env): boolean =>

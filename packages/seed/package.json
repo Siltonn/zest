@@ -12,6 +12,7 @@
     "@zest/db": "workspace:*",
     "@zest/shared": "workspace:*",
     "@zest/simulator": "workspace:*",
+    "better-auth": "^1.6.27",
     "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {

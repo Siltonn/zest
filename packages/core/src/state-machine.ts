@@ -92,6 +92,13 @@ export type TransitionInput = {
   postId: string;
   action: TransitionAction;
   actor: Actor;
+  /**
+   * Tenant fence. Entry points that accept a post id from outside — REST, MCP
+   * — must pass the caller's workspace so an id from another tenant reads as
+   * "not found" rather than acting. Internal workers that already looked the
+   * row up may omit it.
+   */
+  workspaceId?: string;
   /** Applied alongside the status change, inside the same transaction. */
   patch?: Partial<{
     content: typeof schema.posts.$inferSelect.content;
@@ -120,7 +127,14 @@ export async function transition(
     const [current] = await tx
       .select()
       .from(schema.posts)
-      .where(eq(schema.posts.id, input.postId))
+      .where(
+        input.workspaceId
+          ? and(
+              eq(schema.posts.id, input.postId),
+              eq(schema.posts.workspaceId, input.workspaceId),
+            )
+          : eq(schema.posts.id, input.postId),
+      )
       .for("update");
 
     if (!current) throw new Error(`Post ${input.postId} not found`);
