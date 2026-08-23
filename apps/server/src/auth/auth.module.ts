@@ -17,6 +17,13 @@ import { WorkspaceGuard } from "./workspace.guard.js";
 /**
  * Better Auth ships a framework-agnostic fetch handler, so the whole
  * integration is one passthrough route.
+ *
+ * There used to be a consent gate here, redirecting `/mcp/authorize` through
+ * the approval page by hand, because the old plugin issued a code the moment a
+ * session existed. The OAuth provider behind `@better-auth/mcp` requires
+ * consent by default — it checks `oauth_consents` and sends the browser to
+ * `consentPage` when there is no matching grant — so the gate is the library's
+ * job now.
  */
 @Controller("api/auth")
 export class AuthController {
@@ -25,24 +32,6 @@ export class AuthController {
   @All("*path")
   async handle(@Req() req: Request, @Res() res: Response): Promise<void> {
     const url = new URL(req.originalUrl, `http://${req.headers.host}`);
-
-    // The consent gate. Better Auth's authorize endpoint issues a code
-    // immediately when a session exists, and dynamic client registration means
-    // anyone can register a client — so without this, any link could silently
-    // connect an MCP client as whoever is signed in. Every authorization
-    // therefore passes through the /authorize page once; its Authorize button
-    // re-enters with the consent marker, which never comes from an MCP client
-    // because clients follow redirects rather than compose this URL.
-    if (
-      req.method === "GET" &&
-      url.pathname === "/api/auth/mcp/authorize" &&
-      url.searchParams.get("zest_consent") !== "1"
-    ) {
-      const query = new URLSearchParams(url.searchParams);
-      res.redirect(`/authorize?${query.toString()}`);
-      return;
-    }
-    url.searchParams.delete("zest_consent");
 
     // Express headers can repeat; flatten to the shape fetch expects.
     const headers = new Headers();

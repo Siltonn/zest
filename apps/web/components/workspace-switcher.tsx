@@ -23,6 +23,10 @@ export function WorkspaceSwitcher({ currentName }: { currentName?: string }) {
 
   const switchTo = useMutation({
     mutationFn: (id: string) => api.post(`/workspaces/${id}/switch`),
+    // A document load, not a router push: switching workspaces changes a
+    // server cookie, and a client-side navigation would keep the query cache
+    // and the prefetched payloads of the workspace being left behind.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     onSuccess: () => window.location.assign("/"),
     onError: (error: Error) =>
       toast.danger("Could not switch workspace", { description: error.message }),
@@ -86,7 +90,10 @@ function NewWorkspaceDialog({
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }),
     // The cookie now points at the new workspace — land on its dashboard,
-    // where onboarding explains what an empty workspace needs next.
+    // where onboarding explains what an empty workspace needs next. A full
+    // load for the same reason as above: the cached payloads belong to the
+    // workspace being left.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     onSuccess: () => window.location.assign("/"),
     onError: (error: Error) =>
       toast.danger("Could not create the workspace", {

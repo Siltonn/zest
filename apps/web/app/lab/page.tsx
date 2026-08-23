@@ -111,7 +111,7 @@ export default function LabPage() {
       <header>
         <h1 className="text-2xl font-semibold">Lab</h1>
         <p className="text-sm opacity-60">
-          Try copy against Pomelo's audience before it goes anywhere real, and set up
+          Try copy against Pomelo’s audience before it goes anywhere real, and set up
           the small mechanical actions you would rather not do by hand.
         </p>
       </header>
@@ -285,7 +285,7 @@ export default function LabPage() {
                   {item.trigger.keywords && ` matching ${item.trigger.keywords.join(", ")}`}
                 </span>
                 {item.template && (
-                  <div className="text-xs opacity-55">"{item.template}"</div>
+                  <div className="text-xs opacity-55">“{item.template}”</div>
                 )}
               </div>
               <Button

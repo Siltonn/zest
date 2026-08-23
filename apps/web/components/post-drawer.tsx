@@ -105,7 +105,7 @@ export function PostDrawer({
             {post.reasoning && (
               <div className="mt-3 text-sm">
                 <div className="text-xs uppercase tracking-wide opacity-50">
-                  Agent's reasoning
+                  Agent’s reasoning
                 </div>
                 <p className="mt-1 opacity-80">{post.reasoning}</p>
               </div>

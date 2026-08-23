@@ -124,6 +124,11 @@ export default function InboxPage() {
   const active = items[cursor];
 
   useEffect(() => {
+    // Keeps the cursor on a real row after approving the last item. React
+    // would rather this were clamped during render than corrected in an
+    // effect; that is a worthwhile change, but it moves where the keyboard
+    // handlers read the cursor from, so it is not a lint fix.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (cursor >= items.length && items.length > 0) setCursor(items.length - 1);
   }, [items.length, cursor]);
 

@@ -23,16 +23,26 @@ What happens under the hood, all specified by the MCP authorization spec:
    at `/.well-known/oauth-authorization-server`.
 3. The client registers itself (RFC 7591 dynamic client registration) and runs
    the authorization-code + PKCE flow.
-4. The browser lands on `/authorize` — Zest's consent page. Sign in if needed,
-   then explicitly approve. **Every** grant passes this click, even with a live
-   session: registration is open, so the click is the only thing standing
-   between "someone sent me a link" and "an agent acts as me".
+4. The browser lands on `/authorize` — Zest's login and consent page. Sign in
+   if needed, then explicitly approve. Registration is open, so that click is
+   the only thing standing between "someone sent me a link" and "an agent acts
+   as me": no code is issued without a matching row in `oauth_consents`.
+   Approving records the grant, so the *same* client asking again for the same
+   scopes goes straight through — a client asking for more does not.
 5. The token the client receives acts *as the user who approved it* — full
    power, including approvals, and everything it does is audited as
    `mcp { clientId, userId }`.
 
-Tokens are opaque rows in `oauth_access_tokens` (1 h access / 7 d refresh),
-revocable by deleting the row.
+Access tokens are JWTs (1 h), signed with the key pair in `jwks` and
+audience-bound to `<public-url>/mcp`; `/mcp` verifies the signature against
+`/api/auth/jwks` rather than looking the token up. Refresh tokens (7 d) are
+rows in `oauth_refresh_tokens`.
+
+**Revoking a connection** therefore means deleting the client's row in
+`oauth_consents` and its `oauth_refresh_tokens` — which stops renewal and forces
+the next authorization back through the consent screen. The access token the
+client already holds keeps working until it expires, at most an hour: nothing
+looks it up, so nothing can turn it off early.
 
 ### API keys — for headless clients
 

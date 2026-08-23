@@ -55,7 +55,7 @@ export function FastForwardButton({ size }: { size?: "sm" | "md" }) {
       </Tooltip.Trigger>
       <Tooltip.Content className="max-w-64">
         <p className="text-xs leading-relaxed">
-          Advances Pomelo's clock by a day so a published post's audience reacts
+          Advances Pomelo’s clock by a day so a published post’s audience reacts
           now instead of over the next 48 hours. Only affects the simulated
           network — real platforms keep real time.
         </p>

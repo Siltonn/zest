@@ -134,7 +134,7 @@ export default function ComposePage() {
               </Button>
             )}
             <span className="text-xs opacity-55">
-              Rewrites your draft in this account's voice — your point stays yours.
+              Rewrites your draft in this account’s voice — your point stays yours.
             </span>
           </div>
 
