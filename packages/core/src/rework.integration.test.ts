@@ -61,7 +61,7 @@ describe("asking for changes", { skip: !url }, () => {
   });
 
   test("the note is stored where the rewrite can read it", async () => {
-    await requestChanges(db, postId, human("tester"), "Lead with the failure.");
+    await requestChanges(db, workspaceId, postId, human("tester"), "Lead with the failure.");
 
     const [post] = await db
       .select()

@@ -243,6 +243,7 @@ export async function pendingItems(
 /** Accounts on this plan that still have something unwritten. */
 export async function accountsWithPendingItems(
   db: Database,
+  workspaceId: string,
   planId: string,
 ): Promise<string[]> {
   const rows = await db
@@ -250,6 +251,7 @@ export async function accountsWithPendingItems(
     .from(schema.planItems)
     .where(
       and(
+        eq(schema.planItems.workspaceId, workspaceId),
         eq(schema.planItems.planId, planId),
         eq(schema.planItems.status, "planned"),
       ),

@@ -54,6 +54,8 @@ import {
   WorkspaceGuard,
   assertWorkspaceAccess,
   provisionWorkspace,
+  requireScope,
+  requireUserBacked,
   setWorkspaceCookie,
   type AuthedRequest,
 } from "../auth/workspace.guard.js";
@@ -382,6 +384,9 @@ export class WorkspaceController {
 
   @Post("memory")
   async writeMemory(@Req() req: AuthedRequest, @Body() body: unknown) {
+    // A direct rewrite of what the agent reads on its next run — editorial
+    // power, so a key needs the decision scope, not just proposal.
+    requireScope(req, "approve");
     // Shape only — the scope rules (which kinds may carry an accountId) are
     // enforced once, in `assertMemoryScope` at the service, and surface here
     // as a 400 through the domain error filter.
@@ -421,6 +426,10 @@ export class WorkspaceController {
 
   @Post("autonomy")
   async grant(@Req() req: AuthedRequest, @Body() body: unknown) {
+    // Autonomy is the operator's trust, granted by a person. A standing
+    // machine credential widening what the agent may do unreviewed is the
+    // escalation the whole approval loop exists to prevent.
+    requireUserBacked(req);
     const input = z
       .object({
         action: z.enum([
@@ -444,13 +453,20 @@ export class WorkspaceController {
 
     return autonomy.grantAutonomy(this.db, {
       workspaceId: req.workspaceId,
-      grantedBy: req.userId ?? "api",
+      grantedBy: req.userId!,
+      actor: req.actor,
       ...input,
     });
   }
 
+  /**
+   * Revoking needs only the decision scope, not a user: taking autonomy away
+   * is de-escalation, and a kill switch should have fewer preconditions than
+   * the thing it stops.
+   */
   @Delete("autonomy/:id")
   async revoke(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireScope(req, "approve");
     await autonomy.revokeAutonomy(
       this.db,
       req.workspaceId,
@@ -524,6 +540,7 @@ export class WorkspaceController {
 
   @Post("agent/plan")
   async plan(@Req() req: AuthedRequest) {
+    requireScope(req, "propose");
     // Queueing work the worker will silently skip is worse than saying no.
     this.requireModel();
     // One job runs the whole cycle — research once, a strategist per active
@@ -548,6 +565,7 @@ export class WorkspaceController {
 
   @Post("agent/analyze")
   async analyze(@Req() req: AuthedRequest, @Body() body: { weekly?: boolean }) {
+    requireScope(req, "propose");
     this.requireModel();
     const job = await this.agentQueue.add("analysis", {
       workspaceId: req.workspaceId,
@@ -558,6 +576,7 @@ export class WorkspaceController {
 
   @Post("agent/triage")
   async triage(@Req() req: AuthedRequest) {
+    requireScope(req, "propose");
     this.requireModel();
     const job = await this.agentQueue.add("triage", {
       workspaceId: req.workspaceId,
@@ -616,6 +635,9 @@ export class WorkspaceController {
 
   @Post("notifications")
   async addNotification(@Req() req: AuthedRequest, @Body() body: unknown) {
+    // A delivery target receives workspace content from now on — standing
+    // configuration, so it must trace to a person.
+    requireUserBacked(req);
     const input = z
       .object({
         kind: z.enum(["email", "slack", "discord"]),
@@ -639,6 +661,7 @@ export class WorkspaceController {
 
   @Delete("notifications/:id")
   async removeNotification(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireUserBacked(req);
     await this.db
       .delete(schema.notificationTargets)
       .where(
@@ -671,6 +694,9 @@ export class WorkspaceController {
 
   @Post("webhooks")
   async addWebhook(@Req() req: AuthedRequest, @Body() body: unknown) {
+    // Same reasoning as notification targets: a webhook is a standing outbound
+    // channel for workspace events, so creating one must trace to a person.
+    requireUserBacked(req);
     const input = z
       .object({
         url: z.string().url(),
@@ -689,6 +715,7 @@ export class WorkspaceController {
 
   @Delete("webhooks/:id")
   async removeWebhook(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireUserBacked(req);
     const deleted = await webhooks.deleteEndpoint(this.db, req.workspaceId, id);
     if (!deleted) throw new BadRequestException("No such webhook");
     return { ok: true };
@@ -725,6 +752,7 @@ export class WorkspaceController {
       .select({
         id: schema.apiKeys.id,
         name: schema.apiKeys.name,
+        scopes: schema.apiKeys.scopes,
         lastUsedAt: schema.apiKeys.lastUsedAt,
         createdAt: schema.apiKeys.createdAt,
       })
@@ -733,25 +761,50 @@ export class WorkspaceController {
     return rows;
   }
 
+  /**
+   * Minting a credential must trace to a person — a key that can create keys
+   * is privilege escalation with extra steps. Scopes are chosen at mint time
+   * and immutable after; the default leaves out `approve`, so decision power
+   * over the publish queue is something an operator grants on purpose.
+   */
   @Post("api-keys")
-  async createKey(@Req() req: AuthedRequest, @Body() body: { name?: string }) {
+  async createKey(@Req() req: AuthedRequest, @Body() body: unknown) {
+    requireUserBacked(req);
+    const input = z
+      .object({
+        name: z.string().trim().min(1).max(80).default("API key"),
+        scopes: z.array(z.enum(["read", "propose", "approve"])).default(["read", "propose"]),
+      })
+      .parse(body ?? {});
+
     const secret = `zest_${randomBytes(24).toString("base64url")}`;
+    const scopes = [...new Set(["read", ...input.scopes])];
     const [created] = await this.db
       .insert(schema.apiKeys)
       .values({
         workspaceId: req.workspaceId,
-        name: body?.name ?? "API key",
+        name: input.name,
         hashedKey: createHash("sha256").update(secret).digest("hex"),
-        scopes: ["read", "write"],
+        scopes,
       })
       .returning({ id: schema.apiKeys.id, name: schema.apiKeys.name });
 
+    await this.db.insert(schema.auditLogs).values({
+      workspaceId: req.workspaceId,
+      entityType: "api_key",
+      entityId: created!.id,
+      action: "create_api_key",
+      actor: req.actor,
+      diff: { scopes },
+    });
+
     // Returned exactly once — only the hash is stored.
-    return { ...created, key: secret };
+    return { ...created, scopes, key: secret };
   }
 
   @Delete("api-keys/:id")
   async deleteKey(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireUserBacked(req);
     await this.db
       .delete(schema.apiKeys)
       .where(
@@ -760,6 +813,14 @@ export class WorkspaceController {
           eq(schema.apiKeys.workspaceId, req.workspaceId),
         ),
       );
+
+    await this.db.insert(schema.auditLogs).values({
+      workspaceId: req.workspaceId,
+      entityType: "api_key",
+      entityId: id,
+      action: "revoke_api_key",
+      actor: req.actor,
+    });
     return { ok: true };
   }
 }

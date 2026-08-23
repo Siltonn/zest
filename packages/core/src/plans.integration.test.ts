@@ -103,7 +103,7 @@ describe("plans", { skip: !url }, () => {
       ],
     });
 
-    const accounts = await accountsWithPendingItems(db, launch.id);
+    const accounts = await accountsWithPendingItems(db, workspaceId, launch.id);
     assert.equal(accounts.length, 2, "one writer per account, not per item");
 
     // Each writer sees only its own assignments — this is what keeps a founder
@@ -151,7 +151,7 @@ describe("plans", { skip: !url }, () => {
     const after = await pendingItems(db, launch!.id, brand);
     assert.equal(after.length, 0);
 
-    const accounts = await accountsWithPendingItems(db, launch!.id);
+    const accounts = await accountsWithPendingItems(db, workspaceId, launch!.id);
     assert.ok(
       !accounts.includes(brand),
       "an account with nothing left should not get a writer",

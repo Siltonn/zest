@@ -134,6 +134,74 @@ describe("change requests", { skip: !url }, () => {
     assert.equal(after.mode, "auto", "the granted rule should now apply");
   });
 
+  test("a machine credential cannot grant autonomy; a user-backed session can", async () => {
+    const request = await open(db, {
+      workspaceId,
+      kind: "autonomy",
+      summary: "Asking to send replies without review",
+      payload: {
+        action: "send_reply",
+        connectorId: "pomelo",
+        accountId: null,
+        consecutiveCleanApprovals: 12,
+      },
+    });
+
+    // The escalation HITL exists to prevent: a standing credential — an API
+    // key, or an MCP client nobody authorized — approving "stop asking me".
+    await assert.rejects(
+      () => approve(db, workspaceId, request.id, { kind: "api", keyId: "k1" }),
+      /signed-in user/,
+    );
+    await assert.rejects(
+      () => approve(db, workspaceId, request.id, { kind: "mcp", clientId: "c1" }),
+      /signed-in user/,
+    );
+
+    // A refused grant must leave the request pending, not half-decided.
+    const stillPending = await listPending(db, workspaceId);
+    assert.ok(stillPending.some((r) => r.id === request.id));
+
+    // An MCP session a user authorized over OAuth carries that user.
+    const result = await approve(db, workspaceId, request.id, {
+      kind: "mcp",
+      clientId: "c1",
+      userId: "tester",
+    });
+    assert.equal(result.kind, "autonomy");
+
+    const after = await decide(db, {
+      workspaceId,
+      action: "send_reply",
+      connectorId: "pomelo",
+    });
+    assert.equal(after.mode, "auto");
+
+    // Provenance: the grant is recorded as the MCP actor, not disguised
+    // as a bare human click.
+    const [rule] = await db
+      .select()
+      .from(schema.autonomyRules)
+      .where(
+        and(
+          eq(schema.autonomyRules.workspaceId, workspaceId),
+          eq(schema.autonomyRules.action, "send_reply"),
+        ),
+      );
+    assert.equal(rule?.grantedBy, "tester");
+    const [grantLog] = await db
+      .select()
+      .from(schema.auditLogs)
+      .where(
+        and(
+          eq(schema.auditLogs.workspaceId, workspaceId),
+          eq(schema.auditLogs.action, "grant_autonomy"),
+          eq(schema.auditLogs.entityId, rule!.id),
+        ),
+      );
+    assert.equal(grantLog?.actor.kind, "mcp");
+  });
+
   test("rejecting changes nothing but is recorded", async () => {
     const request = await open(db, {
       workspaceId,

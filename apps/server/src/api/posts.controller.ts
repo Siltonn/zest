@@ -21,7 +21,11 @@ import { z } from "zod";
 import { DATABASE } from "../infra/database.module.js";
 import { QUEUE_AGENT_RUN, QUEUE_PUBLISH } from "../queue/queue.constants.js";
 import { enqueueUnique } from "../queue/enqueue.js";
-import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
+import {
+  requireScope,
+  WorkspaceGuard,
+  type AuthedRequest,
+} from "../auth/workspace.guard.js";
 
 /**
  * Posts and the approval inbox.
@@ -29,6 +33,10 @@ import { WorkspaceGuard, type AuthedRequest } from "../auth/workspace.guard.js";
  * Controllers stay thin on purpose: authenticate, validate, call into
  * `@zest/core`, serialize. The MCP server and the queue processors call those
  * same functions, so behaviour cannot drift between the three entry points.
+ *
+ * Scope checks sit at the top of each mutating handler: `propose` to add work
+ * for review, `approve` for anything that decides — or that puts content on a
+ * path to publishing without review, like scheduling a hand-written draft.
  */
 
 const createPostSchema = z.object({
@@ -110,7 +118,12 @@ export class PostsController {
 
   @HttpPost("posts")
   async create(@Req() req: AuthedRequest, @Body() body: unknown) {
+    requireScope(req, "propose");
     const input = createPostSchema.parse(body);
+    // Scheduling a fresh draft sends it out with nobody reviewing it, so a
+    // key needs decision power, not just proposal power. Checked before the
+    // insert so a refusal leaves nothing behind.
+    if (input.scheduledAt) requireScope(req, "approve");
 
     const [account] = await this.db
       .select()
@@ -150,6 +163,7 @@ export class PostsController {
     if (input.scheduledAt) {
       await transition(this.db, {
         postId: created.id,
+        workspaceId: req.workspaceId,
         action: "schedule",
         actor: req.actor,
         patch: { scheduledAt: new Date(input.scheduledAt) },
@@ -165,8 +179,9 @@ export class PostsController {
     @Param("id") id: string,
     @Body() body: unknown,
   ) {
+    requireScope(req, "approve");
     const input = approveSchema.parse(body ?? {});
-    const result = await approvals.approvePost(this.db, id, req.actor, {
+    const result = await approvals.approvePost(this.db, req.workspaceId, id, req.actor, {
       ...(input.text ? { content: { text: input.text, media: [] } } : {}),
       ...(input.scheduledAt ? { scheduledAt: new Date(input.scheduledAt) } : {}),
     });
@@ -179,7 +194,8 @@ export class PostsController {
     @Param("id") id: string,
     @Body() body: { reason?: string },
   ) {
-    await approvals.rejectPost(this.db, id, req.actor, body?.reason);
+    requireScope(req, "approve");
+    await approvals.rejectPost(this.db, req.workspaceId, id, req.actor, body?.reason);
     return { ok: true };
   }
 
@@ -190,7 +206,8 @@ export class PostsController {
     @Body() body: { feedback?: string },
   ) {
     if (!body?.feedback) throw new BadRequestException("Feedback is required");
-    await approvals.requestChanges(this.db, id, req.actor, body.feedback);
+    requireScope(req, "approve");
+    await approvals.requestChanges(this.db, req.workspaceId, id, req.actor, body.feedback);
 
     // The note is only worth writing if something reads it. With no model
     // configured the post still waits in the inbox for a human edit, and the
@@ -212,8 +229,10 @@ export class PostsController {
     @Param("id") id: string,
     @Body() body: { scheduledAt: string },
   ) {
+    requireScope(req, "approve");
     const result = await transition(this.db, {
       postId: id,
+      workspaceId: req.workspaceId,
       action: "schedule",
       actor: req.actor,
       patch: { scheduledAt: new Date(body.scheduledAt) },
@@ -224,8 +243,10 @@ export class PostsController {
   /** Publish now: same path as the scheduler, just with the time set to now. */
   @HttpPost("posts/:id/publish-now")
   async publishNow(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireScope(req, "approve");
     await transition(this.db, {
       postId: id,
+      workspaceId: req.workspaceId,
       action: "schedule",
       actor: req.actor,
       patch: { scheduledAt: new Date() },
@@ -236,8 +257,10 @@ export class PostsController {
 
   @HttpPost("posts/:id/cancel")
   async cancel(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireScope(req, "approve");
     const result = await transition(this.db, {
       postId: id,
+      workspaceId: req.workspaceId,
       action: "cancel",
       actor: req.actor,
     });
@@ -246,8 +269,10 @@ export class PostsController {
 
   @HttpPost("posts/:id/retry")
   async retry(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireScope(req, "approve");
     const result = await transition(this.db, {
       postId: id,
+      workspaceId: req.workspaceId,
       action: "retry",
       actor: req.actor,
       patch: { scheduledAt: new Date(), errorMessage: null },
@@ -261,6 +286,7 @@ export class PostsController {
    */
   @HttpPost("compose/polish")
   async polish(@Req() req: AuthedRequest, @Body() body: unknown) {
+    requireScope(req, "propose");
     const input = z
       .object({ accountId: z.string().uuid(), text: z.string().min(1) })
       .parse(body);
@@ -297,8 +323,10 @@ export class PostsController {
     @Param("id") id: string,
     @Body() body: { text?: string },
   ) {
+    requireScope(req, "approve");
     const draft = await approvals.approveReplyDraft(
       this.db,
+      req.workspaceId,
       id,
       req.actor,
       body?.text ? { text: body.text, media: [] } : undefined,
@@ -314,7 +342,8 @@ export class PostsController {
 
   @HttpPost("replies/:id/reject")
   async rejectReply(@Req() req: AuthedRequest, @Param("id") id: string) {
-    await approvals.rejectReplyDraft(this.db, id, req.actor);
+    requireScope(req, "approve");
+    await approvals.rejectReplyDraft(this.db, req.workspaceId, id, req.actor);
     return { ok: true };
   }
 
@@ -367,6 +396,8 @@ export class PostsController {
   ) {
     const text = body?.text?.trim();
     if (!text) throw new BadRequestException("A reply needs some text");
+    // Written straight to approved and sent — decision power, not proposal.
+    requireScope(req, "approve");
 
     const [row] = await this.db
       .select({ item: schema.inboundItems, account: schema.linkedAccounts })
@@ -430,6 +461,7 @@ export class PostsController {
 
   @HttpPost("inbound/:id/ignore")
   async ignoreInbound(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireScope(req, "approve");
     await this.db
       .update(schema.inboundItems)
       .set({ status: "ignored" })
@@ -453,6 +485,7 @@ export class PostsController {
    */
   @HttpPost("changes/:id/approve")
   async approveChange(@Req() req: AuthedRequest, @Param("id") id: string) {
+    requireScope(req, "approve");
     try {
       return await changeRequests.approve(this.db, req.workspaceId, id, req.actor);
     } catch (error) {
@@ -466,6 +499,7 @@ export class PostsController {
     @Param("id") id: string,
     @Body() body: { reason?: string },
   ) {
+    requireScope(req, "approve");
     try {
       await changeRequests.reject(
         this.db,

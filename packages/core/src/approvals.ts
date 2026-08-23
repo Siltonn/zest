@@ -245,9 +245,14 @@ export async function inboxCount(db: Database, workspaceId: string): Promise<num
  * Approve a post. When the proposal carried a suggested slot we schedule it in
  * the same move, so "approve" means "this will go out" rather than leaving the
  * operator a second chore.
+ *
+ * Every decision function here takes the caller's workspace and treats an id
+ * outside it as "not found". The ids arrive from REST bodies and MCP tool
+ * calls, so the fence belongs here, once — not in each entry point.
  */
 export async function approvePost(
   db: Database,
+  workspaceId: string,
   postId: string,
   actor: Actor,
   options?: { content?: PostContent; scheduledAt?: Date },
@@ -255,11 +260,12 @@ export async function approvePost(
   const [post] = await db
     .select()
     .from(schema.posts)
-    .where(eq(schema.posts.id, postId));
+    .where(and(eq(schema.posts.id, postId), eq(schema.posts.workspaceId, workspaceId)));
   if (!post) throw new Error(`Post ${postId} not found`);
 
   await transition(db, {
     postId,
+    workspaceId,
     action: "approve",
     actor,
     patch: options?.content ? { content: options.content } : undefined,
@@ -270,6 +276,7 @@ export async function approvePost(
 
   const result = await transition(db, {
     postId,
+    workspaceId,
     action: "schedule",
     actor,
     patch: { scheduledAt: slot },
@@ -279,12 +286,14 @@ export async function approvePost(
 
 export async function rejectPost(
   db: Database,
+  workspaceId: string,
   postId: string,
   actor: Actor,
   reason?: string,
 ): Promise<void> {
   await transition(db, {
     postId,
+    workspaceId,
     action: "reject",
     actor,
     patch: reason ? { errorMessage: reason } : undefined,
@@ -297,12 +306,14 @@ export async function rejectPost(
  */
 export async function requestChanges(
   db: Database,
+  workspaceId: string,
   postId: string,
   actor: Actor,
   feedback: string,
 ): Promise<void> {
   await transition(db, {
     postId,
+    workspaceId,
     action: "request_changes",
     actor,
     patch: { errorMessage: feedback },
@@ -311,6 +322,7 @@ export async function requestChanges(
 
 export async function approveReplyDraft(
   db: Database,
+  workspaceId: string,
   draftId: string,
   actor: Actor,
   content?: PostContent,
@@ -319,7 +331,12 @@ export async function approveReplyDraft(
     const [draft] = await tx
       .select()
       .from(schema.replyDrafts)
-      .where(eq(schema.replyDrafts.id, draftId))
+      .where(
+        and(
+          eq(schema.replyDrafts.id, draftId),
+          eq(schema.replyDrafts.workspaceId, workspaceId),
+        ),
+      )
       .for("update");
     if (!draft) throw new Error(`Reply draft ${draftId} not found`);
 
@@ -346,6 +363,7 @@ export async function approveReplyDraft(
 
 export async function rejectReplyDraft(
   db: Database,
+  workspaceId: string,
   draftId: string,
   actor: Actor,
 ): Promise<void> {
@@ -353,7 +371,12 @@ export async function rejectReplyDraft(
     const [draft] = await tx
       .select()
       .from(schema.replyDrafts)
-      .where(eq(schema.replyDrafts.id, draftId));
+      .where(
+        and(
+          eq(schema.replyDrafts.id, draftId),
+          eq(schema.replyDrafts.workspaceId, workspaceId),
+        ),
+      );
     if (!draft) throw new Error(`Reply draft ${draftId} not found`);
 
     await tx

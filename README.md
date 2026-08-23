@@ -250,24 +250,32 @@ Design decisions and the arguments behind them are recorded in [`docs/adr/`](doc
   plan rather than a workspace or an account, and what one-run-per-voice buys
 
 
-## Drive it from Claude Desktop
+## Drive it from Claude (MCP)
 
 Zest is an agent, and it is also something other agents can drive. The MCP
-endpoint is served by the running instance — no separate process, no stdio wrapper:
+endpoint is served by the running instance — no separate process, no stdio
+wrapper — with two ways in (details in [docs/mcp.md](docs/mcp.md)):
 
-```json
-{
-  "mcpServers": {
-    "zest": {
-      "url": "http://localhost:4000/mcp",
-      "headers": { "Authorization": "Bearer zest_…" }
-    }
-  }
-}
+**Claude custom connectors (OAuth).** Add `https://<your-instance>/mcp` as a
+custom connector. That is the whole setup: the client discovers registration
+and sign-in through the standard OAuth metadata this server publishes, the
+browser opens Zest's consent page, and the resulting session acts as the user
+who approved it — full power, honestly audited.
+
+**API keys, for clients that send headers** — Claude Code, scripts:
+
+```bash
+claude mcp add --transport http zest http://localhost:4000/mcp \
+  --header "Authorization: Bearer zest_…"
 ```
 
-Create the key under **Settings → API keys** (or use the one `pnpm demo` prints). Once
-connected you get:
+Create the key under **Settings → API keys** (or use the one `pnpm demo`
+prints). Keys carry scopes — `read`, `propose`, `approve` — and the tool list
+itself is scope-shaped: a read-only key never even sees the `approve` tool. One
+thing no key can do, whatever its scopes: grant the agent autonomy. "Stop
+asking me for review" is a decision that must trace to a person.
+
+Once connected you get:
 
 - **Prompts** — *Review my approval queue*, *How did last week go?*, *Draft a post for
   one account*. Ready-made actions, so the integration is usable without inventing the
@@ -280,7 +288,7 @@ connected you get:
 
 Everything goes through the same `@zest/core` services as the web UI, so an MCP approval
 is indistinguishable from a clicked one — except in the audit log, which records which
-client did it.
+client did it and, for OAuth sessions, which user stood behind it.
 
 ## Drive it from Claude Code
 

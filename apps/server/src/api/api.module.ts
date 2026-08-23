@@ -7,6 +7,7 @@ import { MediaController } from "./media.controller.js";
 import { McpController } from "./mcp.controller.js";
 import { PlansController } from "./plans.controller.js";
 import { PostsController } from "./posts.controller.js";
+import { WellKnownController } from "./well-known.controller.js";
 import { WorkspaceController } from "./workspace.controller.js";
 import { PomeloController } from "../pomelo/pomelo.controller.js";
 import { PlanScheduleModule } from "../worker/plan-schedule.module.js";
@@ -29,6 +30,7 @@ import { MastraModule } from "../infra/mastra.module.js";
     MediaController,
     EventsController,
     McpController,
+    WellKnownController,
     PomeloController,
   ],
 })

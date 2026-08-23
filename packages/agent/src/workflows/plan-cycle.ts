@@ -169,7 +169,11 @@ const gate = createStep({
 
     const targets: z.infer<typeof copyTarget>[] = [];
     for (const plan of writable) {
-      for (const accountId of await plans.accountsWithPendingItems(stage.db, plan.planId)) {
+      for (const accountId of await plans.accountsWithPendingItems(
+        stage.db,
+        stage.workspaceId,
+        plan.planId,
+      )) {
         targets.push({
           planId: plan.planId,
           accountId,

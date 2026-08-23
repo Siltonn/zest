@@ -356,7 +356,9 @@ points is a coincidence, not a pattern.`,
       workspaceId: workspace.id,
       name: "Demo key (MCP)",
       hashedKey: createHash("sha256").update(secret).digest("hex"),
-      scopes: ["read", "write"],
+      // Full power on purpose — the demo shows the whole approve-over-MCP
+      // loop. (Autonomy grants still need a signed-in user; no key has that.)
+      scopes: ["read", "propose", "approve"],
     });
     console.info(`  API key for MCP: ${secret}`);
   }

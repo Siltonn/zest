@@ -1,5 +1,5 @@
 import { and, eq, gte, schema, sql, type Database } from "@zest/db";
-import type { AutonomyAction, AutonomyMode } from "@zest/shared";
+import type { Actor, AutonomyAction, AutonomyMode } from "@zest/shared";
 
 /**
  * Graduated autonomy.
@@ -172,6 +172,8 @@ export async function grantAutonomy(
     accountId?: string;
     conditions?: { sentiment?: "positive" | "neutral" | "negative"; maxPerDay?: number };
     grantedBy: string;
+    /** Recorded in the audit trail; defaults to a human actor for `grantedBy`. */
+    actor?: Actor;
   },
 ): Promise<typeof schema.autonomyRules.$inferSelect> {
   const [rule] = await db
@@ -194,7 +196,9 @@ export async function grantAutonomy(
     entityType: "autonomy_rule",
     entityId: rule.id,
     action: "grant_autonomy",
-    actor: { kind: "human", userId: input.grantedBy },
+    // Honest provenance: a grant approved over MCP is recorded as the MCP
+    // actor (with the user behind it), not disguised as a plain human click.
+    actor: input.actor ?? { kind: "human", userId: input.grantedBy },
     diff: { action: input.action, mode: input.mode },
   });
 

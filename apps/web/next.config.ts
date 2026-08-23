@@ -21,6 +21,13 @@ const config: NextConfig = {
       // server internal — the natural shape, since everything above is proxied
       // — renders every picture as a broken link.
       { source: "/media/:path*", destination: `${serverUrl}/media/:path*` },
+      // The MCP endpoint and the OAuth discovery documents MCP clients read.
+      // Claude connects to <public-url>/mcp; a 401 there points at
+      // /.well-known/oauth-protected-resource, which names the authorization
+      // server, whose endpoints live under /api/auth (proxied above). Keeping
+      // the server internal therefore requires all three to ride this proxy.
+      { source: "/mcp", destination: `${serverUrl}/mcp` },
+      { source: "/.well-known/:path*", destination: `${serverUrl}/.well-known/:path*` },
     ];
   },
 };

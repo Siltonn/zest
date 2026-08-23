@@ -57,8 +57,10 @@ services:
       REDIS_URL: redis://redis:6379
       ZEST_ENCRYPTION_KEY: ${ZEST_ENCRYPTION_KEY:-dev-encryption-key-change-me}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-auth-secret-change-me}
-      BETTER_AUTH_URL: http://localhost:4000
-      WEB_URL: http://localhost:3000
+      # Auth and OAuth discovery live behind the web proxy, so their public
+      # address is the web origin. Override both together when deploying
+      # under a real hostname; BETTER_AUTH_URL follows WEB_URL when unset.
+      WEB_URL: ${WEB_URL:-http://localhost:3000}
       DEMO_MODE: ${DEMO_MODE:-true}
       # Explicit so the volume mount below cannot drift from where uploads land.
       MEDIA_DIR: /app/media

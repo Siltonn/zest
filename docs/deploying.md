@@ -21,9 +21,11 @@ container and one thing to think about.
 ## The topology, which is the part that matters elsewhere
 
 **Only `web` needs to be reachable from a browser.** Next.js proxies everything
-the client asks for — `/api/v1`, `/api/auth`, `/events`, `/api/pomelo`, `/media` —
-to the server over the internal network. So the server wants an internal address
-and no public hostname.
+the client asks for — `/api/v1`, `/api/auth`, `/events`, `/api/pomelo`, `/media`,
+`/mcp`, `/.well-known` — to the server over the internal network. So the server
+wants an internal address and no public hostname. MCP clients (Claude's custom
+connectors) ride the same proxy: they connect to `https://<web>/mcp` and
+discover the OAuth endpoints through `/.well-known`; see [mcp.md](mcp.md).
 
 ```
 browser ──▶ web (public)  ──internal──▶ server ──▶ postgres
@@ -55,8 +57,10 @@ Then, before it faces the internet:
   encrypting them. Change it *before* connecting any account: rotating it later
   makes every stored token undecryptable.
 - Change the Postgres password from `zest:zest`.
-- Set `BETTER_AUTH_URL` and `WEB_URL` to the real public URL, or sign-in
-  redirects and email links point at localhost.
+- Set `WEB_URL` to the real public URL, or sign-in redirects, email links, and
+  MCP OAuth discovery all point at localhost. `BETTER_AUTH_URL` follows it when
+  unset; if you do set it, it must be the same public origin — it is the OAuth
+  issuer MCP clients trust, so an internal address breaks their connection.
 - Drop the `5432` and `6379` port mappings. They are there for local
   development and are a database exposed to the internet in production.
 - Put TLS in front of `web` — Caddy or nginx, or your platform's load balancer.
@@ -73,8 +77,7 @@ DATABASE_URL=<managed postgres>
 REDIS_URL=<managed redis>
 ZEST_ENCRYPTION_KEY=<32+ random>
 BETTER_AUTH_SECRET=<32+ random>
-BETTER_AUTH_URL=https://your-app.example
-WEB_URL=https://your-app.example
+WEB_URL=https://your-app.example   # the public origin; auth and MCP OAuth follow it
 MEDIA_DIR=/data/media          # on a persistent volume
 DEMO_MODE=false
 ```
