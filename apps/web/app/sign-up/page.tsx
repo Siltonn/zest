@@ -1,14 +1,17 @@
 "use client";
 
 import { Button, Card, Form } from "@heroui/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { Field } from "@/components/field";
 import { ZestMark } from "@/components/icons";
+import { SESSION_KEY } from "@/lib/session";
 
 export default function SignUpPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,8 +37,11 @@ export default function SignUpPage() {
       }
 
       // The backend creates a workspace on first authenticated request, so a
-      // new account lands somewhere usable rather than on an error.
-      router.push("/");
+      // new account lands somewhere usable rather than on an error. Clearing
+      // the cached `/me` first: whoever arrived here through the signed-out
+      // redirect has a 401 sitting in it, and the app gate would act on it.
+      queryClient.removeQueries({ queryKey: SESSION_KEY });
+      router.replace("/");
       router.refresh();
     } catch (problem) {
       setError((problem as Error).message);

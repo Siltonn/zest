@@ -1,11 +1,13 @@
 "use client";
 
 import { Button, Card, Form } from "@heroui/react";
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import { Field } from "@/components/field";
 import { ZestMark } from "@/components/icons";
+import { SESSION_KEY, safeNext } from "@/lib/session";
 
 /**
  * Sign in.
@@ -16,7 +18,20 @@ import { ZestMark } from "@/components/icons";
  * these pages.
  */
 export default function SignInPage() {
+  // `useSearchParams` opts the page into client rendering; the boundary is
+  // what keeps that from failing the build.
+  return (
+    <Suspense fallback={null}>
+      <SignInForm />
+    </Suspense>
+  );
+}
+
+function SignInForm() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  // Set when the visitor was sent here from a page they asked for.
+  const next = safeNext(useSearchParams().get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +55,12 @@ export default function SignInPage() {
         throw new Error(body.message ?? "Those details did not work.");
       }
 
-      router.push("/");
+      // The failed `/me` that sent them here is still in the cache, and the
+      // app gate reads it on the way in. Drop it, or signing in successfully
+      // bounces straight back to this form.
+      queryClient.removeQueries({ queryKey: SESSION_KEY });
+      // `replace`, so Back does not return to a form that no longer applies.
+      router.replace(next);
       router.refresh();
     } catch (problem) {
       setError((problem as Error).message);

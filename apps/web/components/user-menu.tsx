@@ -1,17 +1,18 @@
 "use client";
 
 import { Avatar, Dropdown } from "@heroui/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import { useSession } from "@/lib/session";
 import { useTheme, type Theme } from "@/lib/theme";
-import { CheckIcon, MonitorIcon, MoonIcon, SignOutIcon, SunIcon } from "./icons";
-
-type Me = {
-  user: { id: string; name: string; email: string; image: string | null } | null;
-  actor: { kind: string };
-  workspace: { id: string; name: string } | null;
-};
+import {
+  CheckIcon,
+  MonitorIcon,
+  MoonIcon,
+  SignInIcon,
+  SignOutIcon,
+  SunIcon,
+} from "./icons";
 
 const THEMES: { id: Theme; label: string; icon: typeof SunIcon }[] = [
   { id: "light", label: "Light", icon: SunIcon },
@@ -25,26 +26,33 @@ const THEMES: { id: Theme; label: string; icon: typeof SunIcon }[] = [
  * These belong together at the bottom of the sidebar rather than scattered:
  * it is the one place people look for account controls, and putting the theme
  * switch anywhere else means hunting for it.
+ *
+ * The last item follows the session rather than assuming one. Offering "Sign
+ * out" to someone the backend does not recognise — which is what this did —
+ * is worse than useless: it is the one control that could have taken them
+ * somewhere, pointed the wrong way.
  */
 export function UserMenu({ collapsed }: { collapsed: boolean }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
+  const { status, me } = useSession();
 
-  const { data } = useQuery({
-    queryKey: ["me"],
-    queryFn: () => api.get<Me>("/me"),
-  });
+  const user = me?.user ?? null;
+  const signedIn = status === "authenticated" && user !== null;
 
   const signOut = async () => {
     await fetch("/api/auth/sign-out", {
       method: "POST",
       credentials: "include",
     }).catch(() => undefined);
-    router.push("/sign-in");
-    router.refresh();
+    // Drop every cached answer that was scoped to that session, so the next
+    // person to sign in never sees the last one's workspace for a beat.
+    queryClient.clear();
+    // `replace`, not `push`: Back should not walk into an app they just left.
+    router.replace("/sign-in");
   };
 
-  const user = data?.user;
   const initials = (user?.name ?? "?")
     .split(" ")
     .map((part) => part[0])
@@ -68,7 +76,7 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
               {user?.name ?? "Not signed in"}
             </div>
             <div className="truncate text-xs leading-tight opacity-50">
-              {user?.email ?? data?.actor.kind ?? "…"}
+              {user?.email ?? me?.actor.kind ?? "…"}
             </div>
           </div>
         )}
@@ -87,10 +95,17 @@ export function UserMenu({ collapsed }: { collapsed: boolean }) {
               {theme === option.id && <CheckIcon className="size-4" />}
             </Dropdown.Item>
           ))}
-          <Dropdown.Item id="sign-out" onAction={signOut}>
-            <SignOutIcon className="size-4 opacity-70" />
-            Sign out
-          </Dropdown.Item>
+          {signedIn ? (
+            <Dropdown.Item id="sign-out" onAction={signOut}>
+              <SignOutIcon className="size-4 opacity-70" />
+              Sign out
+            </Dropdown.Item>
+          ) : (
+            <Dropdown.Item id="sign-in" onAction={() => router.push("/sign-in")}>
+              <SignInIcon className="size-4 opacity-70" />
+              Sign in
+            </Dropdown.Item>
+          )}
         </Dropdown.Menu>
       </Dropdown.Popover>
     </Dropdown>

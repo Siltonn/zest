@@ -205,6 +205,18 @@ export const SignOutIcon = (p: IconProps) => (
   </Icon>
 );
 
+/**
+ * The same doorway, walked the other way. Only the arrow is mirrored — a CSS
+ * flip of the whole glyph would move the door to the other side, and then the
+ * pair no longer reads as one door with two directions.
+ */
+export const SignInIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" />
+    <path d="M12.5 8.5 16 12l-3.5 3.5M16 12H6.5" />
+  </Icon>
+);
+
 export const PlansIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M4 5h10M4 10h7M4 15h12" />

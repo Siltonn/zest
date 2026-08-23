@@ -7,6 +7,30 @@
 
 const BASE = "/api/v1";
 
+/**
+ * A failed response, with the status kept.
+ *
+ * The status is the part callers act on rather than display: a 401 means the
+ * session is gone and the app has to send the visitor to sign in, which is a
+ * different outcome from an error worth rendering in place. Losing it left
+ * every failure looking alike — which is how a signed-out visitor ended up
+ * sitting in the app shell reading "Not signed in" as if it were a state they
+ * could stay in.
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export function isUnauthorized(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
@@ -29,7 +53,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // Not JSON — the raw text is the best we have.
     }
-    throw new Error(message);
+    throw new ApiError(message, res.status);
   }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
