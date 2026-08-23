@@ -9,27 +9,24 @@ import { ZestMark } from "@/components/icons";
 /**
  * The human checkpoint in the MCP OAuth flow.
  *
- * An MCP client (Claude, an IDE) hits `/api/auth/mcp/authorize`; signed out,
- * the server parks the request and sends the browser here with the OAuth query
- * intact. Dynamic client registration means *anyone* can register a client, so
- * this page is deliberately the only thing between a registered client and a
+ * An MCP client (Claude, an IDE) hits `/api/auth/oauth2/authorize`. Better
+ * Auth parks the whole authorization request into a *signed* query string and
+ * sends the browser here — as the login page when there is no session, and as
+ * the consent page once there is. Both roles land on this one page, which
+ * tells them apart by asking whether a session exists.
+ *
+ * The signed query is the only state the flow has: no cookie, no server-side
+ * parking slot. This page therefore never invents URLs of its own — it hands
+ * `oauth_query` back verbatim on every call, and follows whatever `url` the
+ * server returns. That is what makes the page safe to reload, to open twice,
+ * or to arrive at from a cold browser.
+ *
+ * Dynamic client registration means *anyone* can register a client, so this
+ * screen is deliberately the only thing between a registered client and a
  * token acting as you: it names where the token would go and demands an
- * explicit click — never an auto-redirect.
- *
- * Two details are about correctness rather than looks:
- *
- *  - Better Auth parks the authorization in an `oidc_login_prompt` cookie and
- *    resumes it on whatever response next signs the user in — hijacking that
- *    response with a 302 that (as of 1.6.x) *drops the session cookie*, and
- *    delivering the code somewhere no page is watching. This page carries the
- *    whole request in its own query string, so on mount it deletes that cookie
- *    (it is not HttpOnly) and owns the flow end to end. The sign-in POST also
- *    sets `redirect: "manual"` as a second fence: if the hook ever fires
- *    anyway, the stray code is discarded rather than followed cross-origin.
- *
- *  - Approval re-enters `/api/auth/mcp/authorize` by *document navigation*, so
- *    the resulting 302 to the client's redirect_uri happens at the top level —
- *    which is what loopback callbacks and claude.ai's callback page expect.
+ * explicit click. Better Auth enforces that too — it will not issue a code
+ * without a matching row in `oauth_consents` — so the button here is the thing
+ * that creates the row, never a formality on top of a decision already made.
  */
 export default function AuthorizePage() {
   return (
@@ -43,6 +40,8 @@ function AuthorizeInner() {
   const params = useSearchParams();
   const clientId = params.get("client_id");
   const redirectUri = params.get("redirect_uri");
+  /** The signed authorization request, handed back untouched on every call. */
+  const oauthQuery = params.toString();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -52,10 +51,6 @@ function AuthorizeInner() {
   const [sessionEmail, setSessionEmail] = useState<string | null | false>(null);
 
   useEffect(() => {
-    // Take the parked flow away from Better Auth's resume hook — see the
-    // header comment. The query string is the source of truth from here on.
-    document.cookie = "oidc_login_prompt=; Max-Age=0; path=/";
-
     let cancelled = false;
     void (async () => {
       try {
@@ -90,17 +85,54 @@ function AuthorizeInner() {
 
   const destination = describeDestination(redirectUri);
 
-  function approve() {
-    // Document navigation on purpose — see the header comment. The consent
-    // marker is what lets this request through the server's gate; it exists
-    // so that *only* this click, never a bare link, completes a grant.
-    const query = new URLSearchParams(params.toString());
-    query.set("zest_consent", "1");
-    window.location.href = `/api/auth/mcp/authorize?${query.toString()}`;
+  /**
+   * Every step of the flow answers with `{redirect, url}`, and the url is
+   * either this page again with a refreshed signed query, or the client's
+   * redirect_uri carrying the code. Following it with a document navigation is
+   * what puts the final hop at the top level, which is what loopback callbacks
+   * and claude.ai's callback page expect.
+   */
+  async function post(path: string, body: Record<string, unknown>) {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ...body, oauth_query: oauthQuery }),
+    });
+    const payload = (await res.json().catch(() => null)) as {
+      url?: string;
+      message?: string;
+      error_description?: string;
+    } | null;
+
+    if (!res.ok) {
+      throw new Error(
+        payload?.message ?? payload?.error_description ?? "That did not work.",
+      );
+    }
+    if (!payload?.url) throw new Error("The server did not say where to go next.");
+    window.location.href = payload.url;
   }
 
-  function deny() {
-    // RFC 6749 §4.1.2.1: tell the client it was refused, don't just strand it.
+  async function decide(accept: boolean) {
+    setBusy(true);
+    setError(null);
+    try {
+      await post("/api/auth/oauth2/consent", { accept });
+    } catch (problem) {
+      setError((problem as Error).message);
+      setBusy(false);
+    }
+  }
+
+  /**
+   * Cancelling before sign-in cannot go through `/oauth2/consent` — recording
+   * a refusal still needs a session, so the endpoint answers 401. The client
+   * is owed an answer either way (RFC 6749 §4.1.2.1), so this composes the one
+   * redirect the page is allowed to build itself: an error, to a redirect_uri
+   * the authorization server already validated against the client.
+   */
+  function declineBeforeSignIn() {
     const url = new URL(redirectUri!);
     url.searchParams.set("error", "access_denied");
     const state = params.get("state");
@@ -108,36 +140,17 @@ function AuthorizeInner() {
     window.location.href = url.toString();
   }
 
-  async function signInAndApprove(event: FormEvent) {
+  async function signInAndContinue(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError(null);
-
     try {
-      const res = await fetch("/api/auth/sign-in/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        // "manual" so a resumed authorization's 302 is dropped, not followed.
-        redirect: "manual",
-        body: JSON.stringify({ email, password }),
-      });
-
-      // An opaque redirect reports status 0; only a readable non-OK response
-      // is a definite failure. Either way the session cookie tells the truth.
-      if (res.status >= 400) {
-        const body = (await res.json().catch(() => ({}))) as { message?: string };
-        throw new Error(body.message ?? "Those details did not work.");
-      }
-
-      const session = await fetch("/api/auth/get-session", {
-        credentials: "include",
-      }).then((r) => r.json().catch(() => null) as Promise<{ user?: unknown } | null>);
-      if (!session?.user) throw new Error("Those details did not work.");
-
-      approve();
-    } catch (problem) {
-      setError((problem as Error).message);
+      // Sign-in carries the parked authorization, so Better Auth resumes it on
+      // the same response — landing back here as the consent step, or straight
+      // at the client when consent was already given.
+      await post("/api/auth/sign-in/email", { email, password });
+    } catch {
+      setError("Those details did not work.");
       setBusy(false);
     }
   }
@@ -165,17 +178,26 @@ function AuthorizeInner() {
               <p className="text-sm opacity-70">
                 Signed in as <span className="font-medium">{sessionEmail}</span>
               </p>
+              {error && <p className="text-sm text-danger">{error}</p>}
               <div className="flex gap-2">
-                <Button onPress={approve} className="flex-1">
+                <Button
+                  onPress={() => void decide(true)}
+                  isPending={busy}
+                  className="flex-1"
+                >
                   Authorize
                 </Button>
-                <Button variant="ghost" onPress={deny} className="flex-1">
+                <Button
+                  variant="ghost"
+                  onPress={() => void decide(false)}
+                  className="flex-1"
+                >
                   Cancel
                 </Button>
               </div>
             </div>
           ) : (
-            <Form onSubmit={signInAndApprove} className="space-y-4">
+            <Form onSubmit={signInAndContinue} className="space-y-4">
               <Field
                 label="Email"
                 type="email"
@@ -196,7 +218,7 @@ function AuthorizeInner() {
               <Button type="submit" isPending={busy} className="w-full">
                 Sign in and authorize
               </Button>
-              <Button variant="ghost" onPress={deny} className="w-full">
+              <Button variant="ghost" onPress={declineBeforeSignIn} className="w-full">
                 Cancel
               </Button>
             </Form>

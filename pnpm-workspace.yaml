@@ -6,6 +6,10 @@ allowBuilds:
   esbuild: true
   # optional native msgpack acceleration for BullMQ job payloads
   msgpackr-extract: true
+  # ESLint's module resolver. Its postinstall only exists to fetch a native
+  # binding when pnpm failed to install the platform's optional dependency —
+  # which pnpm does install — so there is nothing for the script to do.
+  unrs-resolver: false
 minimumReleaseAgeExclude:
   - '@mastra/core@1.60.0'
   - '@mastra/deployer@1.60.0'

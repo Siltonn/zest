@@ -35,6 +35,10 @@ export function useTheme(): {
 
   useEffect(() => {
     const stored = (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? "system";
+    // The server cannot read localStorage, so the first render has to be the
+    // default and the stored choice has to arrive after mount. Deriving it
+    // during render instead would mismatch hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setThemeState(stored);
     apply(stored);
     setResolved(document.documentElement.classList.contains("dark") ? "dark" : "light");

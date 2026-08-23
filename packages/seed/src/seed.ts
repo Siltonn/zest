@@ -406,6 +406,10 @@ async function ensureDemoCredential(
       userId,
       accountId: userId,
       providerId: "credential",
+      // Better Auth 1.7 looks accounts up by (issuer, accountId); this is the
+      // value it writes for its own email/password accounts. Get it wrong and
+      // sign-in cannot find the row it just wrote.
+      issuer: "local:credential",
       password: await hashPassword(DEMO_PASSWORD),
     });
     await assertSignInWorks(db, userId);
