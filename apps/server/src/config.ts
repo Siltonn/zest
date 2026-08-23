@@ -43,6 +43,18 @@ const envSchema = z.object({
     .string()
     .default("true")
     .transform((v) => v !== "false" && v !== "0"),
+  /**
+   * Whether the queue dashboard's write actions — retry, remove, pause, drain,
+   * clean — are disabled. Left unset it follows NODE_ENV, which is the split
+   * that actually matters: while you develop, retrying a stuck job by hand is
+   * the point of the dashboard; on a deployed instance the same page can drain
+   * a queue and lose a day of scheduled posts. Set it explicitly to override
+   * either way.
+   */
+  COCKPIT_READONLY: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v !== "false" && v !== "0")),
   MAIL_PROVIDER: z.enum(["resend", "smtp", "console"]).default("console"),
   RESEND_API_KEY: z.string().optional(),
   // One key, every model, and a spend cap — the easiest way to try Zest
@@ -109,3 +121,7 @@ export const runsWorker = (mode: ServerMode): boolean =>
 /** Where this instance lives publicly — the base for OAuth discovery URLs. */
 export const publicBaseUrl = (env: Env): string =>
   (env.BETTER_AUTH_URL ?? env.WEB_URL).replace(/\/$/, "");
+
+/** Local development gets to act on the queues; a deployed instance only looks. */
+export const cockpitReadonly = (env: Env): boolean =>
+  env.COCKPIT_READONLY ?? env.NODE_ENV === "production";

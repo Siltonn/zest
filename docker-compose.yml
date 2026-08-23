@@ -62,6 +62,10 @@ services:
       # under a real hostname; BETTER_AUTH_URL follows WEB_URL when unset.
       WEB_URL: ${WEB_URL:-http://localhost:3000}
       DEMO_MODE: ${DEMO_MODE:-true}
+      # Spelled out rather than left to the NODE_ENV default: this is the file
+      # people copy to deploy from, and a queue dashboard that can drain
+      # `publish` should have to be switched on deliberately.
+      COCKPIT_READONLY: ${COCKPIT_READONLY:-true}
       # Explicit so the volume mount below cannot drift from where uploads land.
       MEDIA_DIR: /app/media
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}

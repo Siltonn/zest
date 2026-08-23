@@ -5,6 +5,7 @@ import { runsApi, runsWorker, type ServerMode } from "./config.js";
 import { DatabaseModule } from "./infra/database.module.js";
 import { NotifierModule } from "./infra/notifier.module.js";
 import { RedisModule } from "./infra/redis.module.js";
+import { CockpitModule } from "./queue/cockpit.module.js";
 import { QueueModule } from "./queue/queue.module.js";
 import { WorkerModule } from "./worker/worker.module.js";
 
@@ -21,6 +22,8 @@ export class AppModule {
         // Auth is needed in both roles: the API to verify callers, the worker
         // because its modules share the same DI graph.
         AuthModule,
+        // After AuthModule because the dashboard's own gate is a session check.
+        CockpitModule,
         ...(runsApi(mode) ? [ApiModule] : []),
         ...(runsWorker(mode) ? [WorkerModule] : []),
       ],
