@@ -58,8 +58,8 @@ services:
       ZEST_ENCRYPTION_KEY: ${ZEST_ENCRYPTION_KEY:-dev-encryption-key-change-me}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-auth-secret-change-me}
       # Auth and OAuth discovery live behind the web proxy, so their public
-      # address is the web origin. Override both together when deploying
-      # under a real hostname; BETTER_AUTH_URL follows WEB_URL when unset.
+      # address is the web origin. Point this at the real hostname when you
+      # deploy; BETTER_AUTH_URL follows it unless you set that one too.
       WEB_URL: ${WEB_URL:-http://localhost:3000}
       DEMO_MODE: ${DEMO_MODE:-true}
       # Spelled out rather than left to the NODE_ENV default: this is the file
